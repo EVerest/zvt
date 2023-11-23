@@ -2,13 +2,13 @@ name: Build & Test with Bazel
 on: [push, pull_request]
 jobs:
   build:
-    name: cargo build
+    name: bazel build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - run: bazelisk build ...
   test:
-    name: cargo test
+    name: bazel test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
