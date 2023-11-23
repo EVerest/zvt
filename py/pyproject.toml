@@ -1,0 +1,16 @@
+[tool.poetry]
+name = "feig-analysis"
+version = "0.1.0"
+description = ""
+authors = ["Holger Rapp <hra@qwello.eu>"]
+readme = "README.md"
+packages = [{include = "feig_analysis"}]
+
+[tool.poetry.dependencies]
+python = "^3.9"
+pyshark = "^0.5.3"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

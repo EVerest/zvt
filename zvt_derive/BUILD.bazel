@@ -1,0 +1,14 @@
+load("@rules_rust//rust:defs.bzl", "rust_library", "rust_proc_macro", "rust_test")
+load("@crate_index//:defs.bzl", "all_crate_deps")
+
+rust_proc_macro(
+    name = "zvt_derive",
+    srcs = ["src/lib.rs"],
+    edition = "2021",
+    proc_macro_deps = all_crate_deps(proc_macro = True),
+    visibility = [
+        "//zvt:__pkg__",
+        "//zvt_builder:__pkg__",
+    ],
+    deps = all_crate_deps(),
+)
