@@ -1,0 +1,19 @@
+name: Build & Test with Cargo
+on: [push, pull_request]
+jobs:
+  build:
+    name: cargo build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --all
+      - run: cargo build --all --examples
+  test:
+    name: cargo test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo test --all
+      - run: cargo test --all --examples

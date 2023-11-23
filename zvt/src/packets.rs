@@ -416,7 +416,7 @@ pub mod tests {
     use std::fs;
 
     pub fn get_bytes(name: &str) -> Vec<u8> {
-        let path_from_root = "rust/zvt/zvt/data/".to_string();
+        let path_from_root = "zvt/data/".to_string();
         let base_dir = match fs::metadata(&path_from_root) {
             Ok(_) => path_from_root,
             Err(_) => format!("data/"),
