@@ -5,3 +5,12 @@ members = [
    "zvt_builder",
    "zvt_derive",
 ]
+
+[workspace.package]
+version = "0.1.0"
+authors = ["Qwello GmbH <embedded-team@qwello.eu>"]
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/qwello/zvt/"
+categories = ["finance", "embedded", "hardware-support"]
+keywords = ["zvt", "ecr", "payment", "payment-terminal", "feig"]

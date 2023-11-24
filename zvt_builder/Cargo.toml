@@ -1,9 +1,15 @@
 [package]
 name = "zvt_builder"
-version = "0.1.0"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+authors.workspace = true
+categories.workspace = true
+keywords.workspace = true
+license.workspace = true
+repository.workspace = true
+version.workspace = true
+description = """
+A crate to interact with payment terminals (ECRs) that use the ZVT protokoll, including stand alone commandline tools to interact with the devices. This is an internal dependency for the ZVT crate.
+"""
 
 [dependencies]
 chrono = "0.4.26"
