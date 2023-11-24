@@ -8,7 +8,7 @@ license.workspace = true
 repository.workspace = true
 version.workspace = true
 description = """
-A crate to interact with payment terminals (ECRs) that use the ZVT protokoll, including stand alone commandline tools to interact with the devices. This is an internal dependency for the ZVT crate.
+A crate to interact with payment terminals (ECRs) that use the ZVT protocol, including stand alone commandline tools to interact with the devices. This is an internal dependency for the ZVT crate.
 """
 
 [lib]
