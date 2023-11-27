@@ -16,14 +16,14 @@ rust_library(
 
 rust_binary(
     name = "status",
-    srcs = glob(["examples/status.rs"]),
+    srcs = glob(["src/bin/status/main.rs"]),
     edition = "2021",
     deps = all_crate_deps() + [":zvt"],
 )
 
 rust_binary(
     name = "feig_update",
-    srcs = glob(["examples/feig_update.rs"]),
+    srcs = glob(["src/bin/feig_update/main.rs"]),
     edition = "2021",
     deps = all_crate_deps() + [":zvt"],
 )
