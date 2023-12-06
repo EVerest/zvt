@@ -7,7 +7,7 @@ use log::debug;
 use std::boxed::Box;
 use std::marker::Unpin;
 use std::pin::Pin;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
 
 pub async fn read_packet_async(src: &mut Pin<&mut impl AsyncReadExt>) -> Result<Vec<u8>> {
     let mut buf = vec![0; 3];
@@ -31,6 +31,18 @@ pub async fn read_packet_async(src: &mut Pin<&mut impl AsyncReadExt>) -> Result<
     Ok(buf.to_vec())
 }
 
+pub async fn write_packet_async<T>(
+    drain: &mut Pin<&mut impl AsyncWriteExt>,
+    p: &T,
+) -> io::Result<()>
+where
+    T: ZvtSerializer + Sync + Send,
+    encoding::Default: encoding::Encoding<T>,
+{
+    let bytes = p.zvt_serialize();
+    drain.write_all(&bytes).await
+}
+
 #[derive(ZvtEnum)]
 enum Ack {
     Ack(packets::Ack),
@@ -46,13 +58,28 @@ where
 {
     // We declare the bytes as a separate variable to help the compiler to
     // figure out that we can send stuff between threads.
-    let bytes = p.zvt_serialize();
-    src.write_all(&bytes).await?;
+    write_packet_async(src, p).await?;
 
     let bytes = read_packet_async(src).await?;
     let _ = Ack::zvt_parse(&bytes)?;
     Ok(())
 }
+
+struct DataSource<T>  
+    where T:  AsyncReadExt + AsyncWriteExt + Unpin {
+        s: T,
+    }
+
+// TODO(hrapp): I wanted to wrap the functions "write_packet_async" and "read_packet_async" into 
+// a struct that can take any `T` and has the more type "read_packet" and "write_packet". However I
+// completely failed to do so because of pin!(). How do I do that?!?
+impl<T> DataSource<T> 
+    where T:  AsyncReadExt + AsyncWriteExt + Unpin {
+        pub async fn read_packet_async(self: Pin<&mut Self>) -> Result<Vec<u8>> {
+            read_packet_async(self.s).await?
+        }
+    }
+
 
 /// The trait for converting a sequence into a stream.
 ///
@@ -91,7 +118,7 @@ where
             let bytes = read_packet_async(&mut src).await?;
             let packet = Self::Output::zvt_parse(&bytes)?;
             // Write the response.
-            src.write_all(&packets::Ack {}.zvt_serialize()).await?;
+            write_packet_async::<packets::Ack>(&mut src, &packets::Ack {}).await?;
             yield packet;
         };
         Box::pin(s)
@@ -149,7 +176,7 @@ impl Sequence for ReadCard {
                 let bytes = read_packet_async(&mut src).await?;
                 let packet = ReadCardResponse::zvt_parse(&bytes)?;
                 // Write the response.
-                src.write_all(&packets::Ack {}.zvt_serialize()).await?;
+                write_packet_async(&mut src, &packets::Ack {}).await?;
 
                 match packet {
                     ReadCardResponse::StatusInformation(_) | ReadCardResponse::Abort(_) => {
@@ -206,7 +233,7 @@ impl Sequence for Initialization {
                 let response = InitializationResponse::zvt_parse(&bytes)?;
 
                 // Every message requires an Ack.
-                src.write_all(&packets::Ack {}.zvt_serialize()).await?;
+                write_packet_async(&mut src, &packets::Ack {}).await?;
 
                 match response {
                     InitializationResponse::CompletionData(_)
@@ -313,7 +340,7 @@ impl Sequence for Diagnosis {
                 let response = DiagnosisResponse::zvt_parse(&bytes)?;
 
                 // Every message requires an Ack.
-                src.write_all(&packets::Ack {}.zvt_serialize()).await?;
+                write_packet_async(&mut src, &packets::Ack {}).await?;
 
                 match response {
                     DiagnosisResponse::CompletionData(_)
@@ -380,7 +407,7 @@ impl Sequence for EndOfDay {
                 let packet = EndOfDayResponse::zvt_parse(&bytes)?;
 
                 // Write the response.
-                src.write_all(&packets::Ack {}.zvt_serialize()).await?;
+                write_packet_async(&mut src, &packets::Ack {}).await?;
                 match packet {
                     EndOfDayResponse::CompletionData(_) | EndOfDayResponse::Abort(_) => {
                         yield packet;
@@ -445,7 +472,7 @@ impl Sequence for Reservation {
             loop {
                 let bytes = read_packet_async(&mut src).await?;
                 let packet = AuthorizationResponse::zvt_parse(&bytes)?;
-                src.write_all(&packets::Ack {}.zvt_serialize()).await?;
+                write_packet_async(&mut src, &packets::Ack {}).await?;
                 match packet {
                     AuthorizationResponse::CompletionData(_) | AuthorizationResponse::Abort(_) => {
                         yield packet;
@@ -515,7 +542,7 @@ impl Sequence for PartialReversal {
             loop {
                 let bytes = read_packet_async(&mut src).await?;
                 let packet = PartialReversalResponse::zvt_parse(&bytes)?;
-                src.write_all(&packets::Ack {}.zvt_serialize()).await?;
+                write_packet_async(&mut src, &packets::Ack {}).await?;
                 match packet {
                     PartialReversalResponse::CompletionData(_)
                     | PartialReversalResponse::PartialReversalAbort(_) => {
@@ -555,7 +582,7 @@ impl Sequence for PreAuthReversal {
             loop {
                 let bytes = read_packet_async(&mut src).await?;
                 let packet = PartialReversalResponse::zvt_parse(&bytes)?;
-                src.write_all(&packets::Ack {}.zvt_serialize()).await?;
+                write_packet_async(&mut src, &packets::Ack {}).await?;
                 match packet {
                     PartialReversalResponse::CompletionData(_)
                     | PartialReversalResponse::PartialReversalAbort(_) => {
@@ -606,7 +633,7 @@ impl Sequence for PrintSystemConfiguration {
             loop {
                 let bytes = read_packet_async(&mut src).await?;
                 let packet = PrintSystemConfigurationResponse::zvt_parse(&bytes)?;
-                src.write_all(&packets::Ack {}.zvt_serialize()).await?;
+                write_packet_async(&mut src, &packets::Ack {}).await?;
                 match packet {
                     PrintSystemConfigurationResponse::CompletionData(_) => {
                         yield packet;
@@ -677,7 +704,7 @@ impl Sequence for StatusEnquiry {
             loop {
                 let bytes = read_packet_async(&mut src).await?;
                 let packet = StatusEnquiryResponse::zvt_parse(&bytes)?;
-                src.write_all(&packets::Ack {}.zvt_serialize()).await?;
+                write_packet_async(&mut src, &packets::Ack {}).await?;
                 match packet {
                     StatusEnquiryResponse::CompletionData(_) => {
                         yield packet;

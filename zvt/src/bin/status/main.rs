@@ -51,13 +51,76 @@ fn init_logger() {
         .init();
 }
 
+use std::fs::File;
+use std::io;
+use std::pin::Pin;
+use std::task::{Context, Poll};
+use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
+
+pub struct LoggingTcpStream {
+    stream: TcpStream,
+    file: File,
+}
+
+impl LoggingTcpStream {
+    pub async fn new(stream: TcpStream, file_path: &str) -> io::Result<Self> {
+        let file = File::create(file_path)?;
+        Ok(LoggingTcpStream { stream, file })
+    }
+}
+
+impl AsyncRead for LoggingTcpStream {
+    fn poll_read(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        let self_mut = self.get_mut();
+        let read = buf.filled().len();
+        let poll = Pin::new(&mut self_mut.stream).poll_read(cx, buf);
+        if let Poll::Ready(Ok(_)) = poll {
+            let buf = &buf.filled()[read..];
+            self_mut.file.write_all(buf)?;
+        }
+        poll
+    }
+}
+
+impl AsyncWrite for LoggingTcpStream {
+    fn poll_write(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<io::Result<usize>> {
+        let self_mut = self.get_mut();
+        let poll = Pin::new(&mut self_mut.stream).poll_write(cx, buf);
+        if let Poll::Ready(Ok(size)) = poll {
+            // If write is successful, write to file
+            let data = &buf[..size];
+            self_mut.file.write_all(data)?;
+        }
+        poll
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.get_mut().stream).poll_flush(cx)
+    }
+
+    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+        Pin::new(&mut self.get_mut().stream).poll_shutdown(cx)
+    }
+}
+
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
     init_logger();
     let args = Args::parse();
 
     info!("Using the args {:?}", args);
-    let mut socket = TcpStream::connect(args.ip).await?;
+    let mut socket = LoggingTcpStream {
+        stream: TcpStream::connect(args.ip).await?,
+        file: File::create("/tmp/dump.txt")?,
+    };
 
     let request = packets::Registration {
         password: args.password,
