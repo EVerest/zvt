@@ -1,5 +1,6 @@
 pub mod constants;
 pub mod feig;
+pub mod logging;
 pub mod packets;
 pub mod sequences;
 
