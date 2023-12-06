@@ -1,5 +1,5 @@
-use crate::sequences::{read_packet_async, write_with_ack_async, Sequence};
-use crate::{packets, ZvtEnum, ZvtParser, ZvtSerializer};
+use crate::sequences::{read_packet_async, write_packet_async, write_with_ack_async, Sequence};
+use crate::{packets, ZvtEnum, ZvtParser};
 use anyhow::Result;
 use async_stream::try_stream;
 use std::boxed::Box;
@@ -146,14 +146,12 @@ impl WriteFile {
 
                 match response {
                     WriteFileResponse::CompletionData(_) => {
-                        src.write_all(&packets::Ack {}.zvt_serialize()).await?;
-
+                        write_packet_async(&mut src, &packets::Ack {}).await?;
                         yield response;
                         break;
                     }
                     WriteFileResponse::Abort(_) => {
-                        src.write_all(&packets::Ack {}.zvt_serialize()).await?;
-
+                        write_packet_async(&mut src, &packets::Ack {}).await?;
                         yield response;
                         break;
                     }
@@ -195,7 +193,7 @@ impl WriteFile {
                                 }),
                             }),
                         };
-                        src.write_all(&packet.zvt_serialize()).await?;
+                        write_packet_async(&mut src, &packet).await?;
 
                         yield response;
                     }
