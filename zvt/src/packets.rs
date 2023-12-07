@@ -351,6 +351,16 @@ pub struct Diagnosis {
     pub tlv: Option<tlv::Diagnosis>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum DiagnosisType {
+    Line = 1,
+    Extended = 2,
+    Configuration = 3,
+    EmvConfiguration = 4,
+    Ep2Configuration = 5,
+}
+
 #[derive(Debug, PartialEq, Zvt)]
 #[zvt_control_field(class = 0x06, instr = 0x93)]
 pub struct Initialization {

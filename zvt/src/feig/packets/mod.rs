@@ -65,9 +65,15 @@ pub struct WriteFile {
 #[derive(Debug, PartialEq, Zvt)]
 #[zvt_control_field(class = 0x0f, instr = 0xa1)]
 pub struct CVendFunctions {
+    #[zvt_bmp(length = length::Fixed<3>, encoding = encoding::Bcd)]
+    pub password: Option<usize>,
+
     #[zvt_bmp( encoding = encoding::BigEndian)]
     pub instr: u16,
 }
+
+pub const CVEND_FUNCTIONS_ENHANCED_SYSTEMS_INFO: u16 = 1;
+pub const CVEND_FUNCTIONS_ENHANCED_FACTORY_RESET: u16 = 0x0255;
 
 #[derive(Debug, PartialEq, Zvt)]
 #[zvt_control_field(class = 0x80, instr = 0x00)]
@@ -192,7 +198,10 @@ mod test {
     #[test]
     fn test_cvend_functions() {
         let bytes = get_bytes("1680761818.690979000_ecr_pt.blob");
-        let expected = CVendFunctions { instr: 0x01 };
+        let expected = CVendFunctions {
+            password: None,
+            instr: 0x01,
+        };
         assert_eq!(CVendFunctions::zvt_deserialize(&bytes).unwrap().0, expected);
         assert_eq!(bytes, expected.zvt_serialize());
     }

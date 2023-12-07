@@ -3,29 +3,12 @@ load("@crate_index//:defs.bzl", "all_crate_deps")
 
 rust_library(
     name = "zvt",
-    srcs = glob(
-        ["src/**/*.rs"],
-        exclude = ["src/main.rs"],
-    ),
+    srcs = glob(["src/**/*.rs"]),
     crate_name = "zvt",
     edition = "2021",
     proc_macro_deps = all_crate_deps(proc_macro = True) + ["//zvt_derive"],
     visibility = ["//visibility:public"],
     deps = all_crate_deps() + ["//zvt_builder"],
-)
-
-rust_binary(
-    name = "status",
-    srcs = glob(["src/bin/status/main.rs"]),
-    edition = "2021",
-    deps = all_crate_deps() + [":zvt"],
-)
-
-rust_binary(
-    name = "feig_update",
-    srcs = glob(["src/bin/feig_update/main.rs"]),
-    edition = "2021",
-    deps = all_crate_deps() + [":zvt"],
 )
 
 rust_test(

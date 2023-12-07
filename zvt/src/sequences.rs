@@ -3,7 +3,7 @@ use crate::{encoding, ZvtEnum, ZvtParser, ZvtSerializer};
 use anyhow::Result;
 use async_stream::try_stream;
 use futures::Stream;
-use log::{log_enabled, debug, Level::Debug};
+use log::{debug, log_enabled, Level::Debug};
 use std::boxed::Box;
 use std::marker::Unpin;
 use std::pin::Pin;

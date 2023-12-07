@@ -3,6 +3,7 @@ resolver = "2"
 members = [
    "zvt", 
    "zvt_builder",
+   "zvt_cli", 
    "zvt_derive",
 ]
 

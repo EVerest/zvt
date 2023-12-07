@@ -342,7 +342,7 @@ fn derive_zvt_command_trait(
 }
 
 fn derive(ast: &syn::DeriveInput) -> proc_macro::TokenStream {
-    // TODO(sirver): These should return compile_error! instead of panic.
+    // TODO(hrapp): These should return compile_error! instead of panic.
     // Check the input
     let Data::Struct(ref s) = ast.data else {
         panic!("Only structs are supported");
