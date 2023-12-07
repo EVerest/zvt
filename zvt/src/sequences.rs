@@ -7,7 +7,7 @@ use log::debug;
 use std::boxed::Box;
 use std::marker::Unpin;
 use std::pin::Pin;
-use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
+use tokio::io::{self, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
 pub async fn read_packet_async(src: &mut Pin<&mut impl AsyncReadExt>) -> Result<Vec<u8>> {
     let mut buf = vec![0; 3];
@@ -65,21 +65,41 @@ where
     Ok(())
 }
 
-struct DataSource<T>  
-    where T:  AsyncReadExt + AsyncWriteExt + Unpin {
-        s: T,
+trait AsyncReadWrite: AsyncRead + AsyncWrite + Unpin + Sync + Send {}
+
+#[pin_project::pin_project]
+pub struct DataSource {
+    #[pin]
+    s: Box<dyn AsyncReadWrite>,
+}
+
+impl DataSource {
+    pub async fn read_packet_async(self: Pin<&mut Self>) -> Result<Vec<u8>> {
+        let this = self.project();
+        let mut pinned_inner = this.s;
+        Ok(read_packet_async(&mut pinned_inner).await?)
     }
 
-// TODO(hrapp): I wanted to wrap the functions "write_packet_async" and "read_packet_async" into 
-// a struct that can take any `T` and has the more type "read_packet" and "write_packet". However I
-// completely failed to do so because of pin!(). How do I do that?!?
-impl<T> DataSource<T> 
-    where T:  AsyncReadExt + AsyncWriteExt + Unpin {
-        pub async fn read_packet_async(self: Pin<&mut Self>) -> Result<Vec<u8>> {
-            read_packet_async(self.s).await?
-        }
+    pub async fn write_packet_async<P>(self: Pin<&mut Self>, p: &P) -> Result<()>
+    where
+        P: ZvtSerializer + Sync + Send,
+        encoding::Default: encoding::Encoding<P>,
+    {
+        let this = self.project();
+        let mut pinned_inner = this.s;
+        Ok(write_packet_async(&mut pinned_inner, p).await?)
     }
 
+    pub async fn write_with_ack_async<P>(self: Pin<&mut Self>, p: &P) -> Result<()>
+    where
+        P: ZvtSerializer + Sync + Send,
+        encoding::Default: encoding::Encoding<P>,
+    {
+        let this = self.project();
+        let mut pinned_inner = this.s;
+        Ok(write_with_ack_async(&mut pinned_inner, p).await?)
+    }
+}
 
 /// The trait for converting a sequence into a stream.
 ///

@@ -1,16 +1,15 @@
-use crate::sequences::{read_packet_async, write_packet_async, write_with_ack_async, Sequence};
-use crate::{packets, ZvtEnum, ZvtParser };
+use crate::sequences::DataSource;
+use crate::sequences::Sequence;
+use crate::{packets, ZvtEnum, ZvtParser};
 use anyhow::Result;
 use async_stream::try_stream;
 use std::boxed::Box;
 use std::collections::HashMap;
 use std::io::Seek;
 use std::io::{Error, ErrorKind};
-use std::marker::Unpin;
 use std::os::unix::fs::FileExt;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio_stream::Stream;
 use zvt_builder::ZVTError;
 
@@ -90,15 +89,12 @@ pub enum WriteFileResponse {
 }
 
 impl WriteFile {
-    pub fn into_stream<Source>(
+    pub fn into_stream(
         path: PathBuf,
         password: usize,
         adpu_size: u32,
-        src: &mut Source,
-    ) -> Pin<Box<impl Stream<Item = Result<WriteFileResponse>> + '_>>
-    where
-        Source: AsyncReadExt + AsyncWriteExt + Unpin,
-    {
+        src: &mut DataSource,
+    ) -> Pin<Box<impl Stream<Item = Result<WriteFileResponse>> + '_>> {
         // Protocol from the handbook (the numbering is not part of the handbook)
         // 1.1 ECR->PT: Send over the list of all files with their sizes.
         // 1.2 PT->ECR: Ack
@@ -133,25 +129,25 @@ impl WriteFile {
             };
 
             // 1.1. and 1.2
-            write_with_ack_async(&packet, &mut src).await?;
+            src.write_with_ack_async(&packet).await?;
             let mut buf = vec![0; adpu_size as usize];
             println!("the length is {}", buf.len());
 
             loop {
                 // Get the data.
-                let bytes = read_packet_async(&mut src).await?;
+                let bytes = src.read_packet_async().await?;
                 println!("The packet is {:?}", bytes);
 
                 let response = WriteFileResponse::zvt_parse(&bytes)?;
 
                 match response {
                     WriteFileResponse::CompletionData(_) => {
-                        write_packet_async(&mut src, &packets::Ack {}).await?;
+                        src.write_packet_async(&packets::Ack {}).await?;
                         yield response;
                         break;
                     }
                     WriteFileResponse::Abort(_) => {
-                        write_packet_async(&mut src, &packets::Ack {}).await?;
+                        src.write_packet_async(&packets::Ack {}).await?;
                         yield response;
                         break;
                     }
@@ -193,7 +189,7 @@ impl WriteFile {
                                 }),
                             }),
                         };
-                        write_packet_async(&mut src, &packet).await?;
+                        src.write_packet_async(&packet).await?;
 
                         yield response;
                     }
