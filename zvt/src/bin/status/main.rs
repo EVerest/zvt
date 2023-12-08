@@ -4,7 +4,7 @@ use log::info;
 use std::io::Write;
 use tokio::net::TcpStream;
 use tokio_stream::StreamExt;
-use zvt::{packets, sequences, sequences::Sequence};
+use zvt::{io, packets, sequences, sequences::Sequence};
 
 #[derive(Parser, Debug)]
 struct Args {
@@ -57,7 +57,8 @@ async fn main() -> std::io::Result<()> {
     let args = Args::parse();
 
     info!("Using the args {:?}", args);
-    let mut socket = TcpStream::connect(args.ip).await?;
+    let source = TcpStream::connect(args.ip).await?;
+    let mut socket = io::PacketTransport { source };
 
     let request = packets::Registration {
         password: args.password,
