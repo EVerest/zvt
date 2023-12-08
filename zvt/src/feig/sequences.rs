@@ -1,3 +1,4 @@
+use crate::logging::{AsyncReadExt, AsyncWriteExt};
 use crate::sequences::{read_packet_async, write_with_ack_async, Sequence};
 use crate::{packets, ZvtEnum, ZvtParser, ZvtSerializer};
 use anyhow::Result;
@@ -10,7 +11,6 @@ use std::marker::Unpin;
 use std::os::unix::fs::FileExt;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio_stream::Stream;
 use zvt_builder::ZVTError;
 

@@ -1,13 +1,12 @@
+use crate::logging::{AsyncReadExt, AsyncWriteExt};
 use crate::packets;
 use crate::{encoding, ZvtEnum, ZvtParser, ZvtSerializer};
 use anyhow::Result;
 use async_stream::try_stream;
 use futures::Stream;
-use log::debug;
 use std::boxed::Box;
 use std::marker::Unpin;
 use std::pin::Pin;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 pub async fn read_packet_async(src: &mut Pin<&mut impl AsyncReadExt>) -> Result<Vec<u8>> {
     let mut buf = vec![0; 3];
@@ -25,8 +24,6 @@ pub async fn read_packet_async(src: &mut Pin<&mut impl AsyncReadExt>) -> Result<
     let start = buf.len();
     buf.resize(start + len, 0);
     src.read_exact(&mut buf[start..]).await?;
-
-    debug!("Received {buf:?}");
 
     Ok(buf.to_vec())
 }
