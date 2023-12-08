@@ -1,6 +1,6 @@
 use crate::logging::PacketWriter;
 use crate::sequences::Sequence;
-use crate::{packets, ZvtEnum, ZvtParser};
+use crate::{packets, ZvtEnum};
 use anyhow::Result;
 use async_stream::try_stream;
 use std::boxed::Box;
@@ -138,10 +138,7 @@ impl WriteFile {
 
             loop {
                 // Get the data.
-                let bytes = src.read_packet().await?;
-                println!("The packet is {:?}", bytes);
-
-                let response = WriteFileResponse::zvt_parse(&bytes)?;
+                let response = src.read_packet().await?;
 
                 match response {
                     WriteFileResponse::CompletionData(_) => {

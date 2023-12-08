@@ -19,7 +19,11 @@ impl<S> PacketWriter<S>
 where
     S: AsyncReadExt + Unpin + Send,
 {
-    pub async fn read_packet(&mut self) -> Result<Vec<u8>> {
+    /// Reads an ADPU packet from the PT.
+    pub async fn read_packet<T>(&mut self) -> Result<T>
+    where
+        T: ZvtParser + Send,
+    {
         let mut buf = vec![0; 3];
         self.source.read_exact(&mut buf).await?;
 
@@ -38,7 +42,7 @@ where
 
         log::debug!("Read {:?}", buf);
 
-        Ok(buf.to_vec())
+        Ok(T::zvt_parse(&buf)?)
     }
 }
 
@@ -46,6 +50,7 @@ impl<S> PacketWriter<S>
 where
     S: AsyncWriteExt + Unpin + Send,
 {
+    /// Writes an ADPU packet to the PT.
     pub async fn write_packet<'a, T>(&mut self, msg: &T) -> Result<()>
     where
         T: ZvtSerializer + Sync + Send,
@@ -64,6 +69,18 @@ impl<S> PacketWriter<S>
 where
     S: AsyncWriteExt + AsyncReadExt + Unpin + Send,
 {
+    /// Reads an ADPU packet from the PT and send an [packets::Ack].
+    pub async fn read_packet_with_ack<'a, T>(&mut self) -> Result<T>
+    where
+        T: ZvtParser + Send,
+    {
+        let packet = self.read_packet::<T>().await?;
+        self.write_packet(&packets::Ack {}).await?;
+
+        Ok(packet)
+    }
+
+    /// Writes an ADPU packet to the PT and awaits its [packets::Ack].
     pub async fn write_packet_with_ack<'a, T>(&mut self, msg: &T) -> Result<()>
     where
         T: ZvtSerializer + Sync + Send,
@@ -71,8 +88,7 @@ where
     {
         self.write_packet(msg).await?;
 
-        let bytes = self.read_packet().await?;
-        let _ = Ack::zvt_parse(&bytes)?;
+        let _ = self.read_packet::<Ack>().await?;
 
         Ok(())
     }

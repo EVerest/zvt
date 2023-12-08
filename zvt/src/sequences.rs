@@ -42,8 +42,7 @@ where
             // This pin has nothing to do with the fact that we return a Stream
             // but is needed to access methods like `write_packet`.
             src.write_packet_with_ack(input).await?;
-            let bytes = src.read_packet().await?;
-            let packet = Self::Output::zvt_parse(&bytes)?;
+            let packet = src.read_packet().await?;
             // Write the response.
             src.write_packet::<packets::Ack>(&packets::Ack {}).await?;
             yield packet;
@@ -99,8 +98,7 @@ impl Sequence for ReadCard {
         let s = try_stream! {
             src.write_packet_with_ack(input).await?;
             loop {
-                let bytes = src.read_packet().await?;
-                let packet = ReadCardResponse::zvt_parse(&bytes)?;
+                let packet = src.read_packet().await?;
                 // Write the response.
                 src.write_packet(&packets::Ack {}).await?;
 
@@ -154,8 +152,7 @@ impl Sequence for Initialization {
             // 2.18.1
             src.write_packet_with_ack(input).await?;
             loop {
-                let bytes = src.read_packet().await?;
-                let response = InitializationResponse::zvt_parse(&bytes)?;
+                let response = src.read_packet().await?;
 
                 // Every message requires an Ack.
                 src.write_packet(&packets::Ack {}).await?;
@@ -260,8 +257,7 @@ impl Sequence for Diagnosis {
             // 2.18.1
             src.write_packet_with_ack(input).await?;
             loop {
-                let bytes = src.read_packet().await?;
-                let response = DiagnosisResponse::zvt_parse(&bytes)?;
+                let response = src.read_packet().await?;
 
                 // Every message requires an Ack.
                 src.write_packet(&packets::Ack {}).await?;
@@ -326,8 +322,7 @@ impl Sequence for EndOfDay {
             src.write_packet_with_ack(input).await?;
 
             loop {
-                let bytes = src.read_packet().await?;
-                let packet = EndOfDayResponse::zvt_parse(&bytes)?;
+                let packet = src.read_packet().await?;
 
                 // Write the response.
                 src.write_packet(&packets::Ack {}).await?;
@@ -392,8 +387,7 @@ impl Sequence for Reservation {
             src.write_packet_with_ack(input).await?;
 
             loop {
-                let bytes = src.read_packet().await?;
-                let packet = AuthorizationResponse::zvt_parse(&bytes)?;
+                let packet = src.read_packet().await?;
                 src.write_packet(&packets::Ack {}).await?;
                 match packet {
                     AuthorizationResponse::CompletionData(_) | AuthorizationResponse::Abort(_) => {
@@ -461,8 +455,7 @@ impl Sequence for PartialReversal {
             src.write_packet_with_ack(input).await?;
 
             loop {
-                let bytes = src.read_packet().await?;
-                let packet = PartialReversalResponse::zvt_parse(&bytes)?;
+                let packet = src.read_packet().await?;
                 src.write_packet(&packets::Ack {}).await?;
                 match packet {
                     PartialReversalResponse::CompletionData(_)
@@ -500,8 +493,7 @@ impl Sequence for PreAuthReversal {
             src.write_packet_with_ack(input).await?;
 
             loop {
-                let bytes = src.read_packet().await?;
-                let packet = PartialReversalResponse::zvt_parse(&bytes)?;
+                let packet = src.read_packet().await?;
                 src.write_packet(&packets::Ack {}).await?;
                 match packet {
                     PartialReversalResponse::CompletionData(_)
@@ -550,8 +542,7 @@ impl Sequence for PrintSystemConfiguration {
             src.write_packet_with_ack(input).await?;
 
             loop {
-                let bytes = src.read_packet().await?;
-                let packet = PrintSystemConfigurationResponse::zvt_parse(&bytes)?;
+                let packet = src.read_packet().await?;
                 src.write_packet(&packets::Ack {}).await?;
                 match packet {
                     PrintSystemConfigurationResponse::CompletionData(_) => {
@@ -620,8 +611,7 @@ impl Sequence for StatusEnquiry {
             src.write_packet_with_ack(input).await?;
 
             loop {
-                let bytes = src.read_packet().await?;
-                let packet = StatusEnquiryResponse::zvt_parse(&bytes)?;
+                let packet = src.read_packet().await?;
                 src.write_packet(&packets::Ack {}).await?;
                 match packet {
                     StatusEnquiryResponse::CompletionData(_) => {
