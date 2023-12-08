@@ -3,7 +3,7 @@ use crate::{encoding, ZvtEnum, ZvtParser, ZvtSerializer};
 use anyhow::Result;
 use async_stream::try_stream;
 use futures::Stream;
-use log::{log_enabled, debug, Level::Debug};
+use log::debug;
 use std::boxed::Box;
 use std::marker::Unpin;
 use std::pin::Pin;
@@ -25,10 +25,7 @@ pub async fn read_packet_async(src: &mut Pin<&mut impl AsyncReadExt>) -> Result<
     let start = buf.len();
     buf.resize(start + len, 0);
     src.read_exact(&mut buf[start..]).await?;
-
-    if log_enabled!(Debug) {
-        debug!("RX: {}", pretty_hex::simple_hex(&buf));
-    }
+    debug!("RX: {}", pretty_hex::simple_hex(&buf));
 
     Ok(buf.to_vec())
 }
@@ -42,9 +39,7 @@ where
     encoding::Default: encoding::Encoding<T>,
 {
     let bytes = p.zvt_serialize();
-    if log_enabled!(Debug) {
-        debug!("TX: {}", pretty_hex::simple_hex(&bytes));
-    }
+    debug!("TX: {}", pretty_hex::simple_hex(&bytes));
     drain.write_all(&bytes).await
 }
 
