@@ -15,7 +15,7 @@ uses in production in most of our charging stations.
 
 ## Getting started
 
-Start by looking in [`status.rs`](zvt/examples/status.rs) for a typical way of
+Start by looking in [`status`](zvt/src/bin/status/main.rs) for a typical way of
 interfacing with a terminal. A useful standalone tool is
-[`feig_update.rs`](zvt/examples/feig_update.rs) which we use in production to
+[`feig_update`](zvt/src/bin/feig_update/main.rs) which we use in production to
 update the Firmware of our cVEND plug terminals.
