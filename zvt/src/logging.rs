@@ -1,22 +1,25 @@
+use crate::packets;
+use crate::ZvtEnum;
+use crate::ZvtParser;
 use anyhow::Result;
-use async_trait::async_trait;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use zvt_builder::encoding;
+use zvt_builder::ZvtSerializer;
+
+#[derive(ZvtEnum)]
+pub enum Ack {
+    Ack(packets::Ack),
+}
 
 pub struct PacketWriter<Source> {
     pub source: Source,
 }
 
-#[async_trait]
-pub trait AsyncReadPacket {
-    async fn read_packet(&mut self) -> Result<Vec<u8>>;
-}
-
-#[async_trait]
-impl<S> AsyncReadPacket for PacketWriter<S>
+impl<S> PacketWriter<S>
 where
     S: AsyncReadExt + Unpin + Send,
 {
-    async fn read_packet(&mut self) -> Result<Vec<u8>> {
+    pub async fn read_packet(&mut self) -> Result<Vec<u8>> {
         let mut buf = vec![0; 3];
         self.source.read_exact(&mut buf).await?;
 
@@ -39,21 +42,38 @@ where
     }
 }
 
-#[async_trait]
-pub trait AsyncWritePacket {
-    async fn write_packet<'a>(&mut self, buf: &'a [u8]) -> Result<()>;
-}
-
-#[async_trait]
-impl<S> AsyncWritePacket for PacketWriter<S>
+impl<S> PacketWriter<S>
 where
     S: AsyncWriteExt + Unpin + Send,
 {
-    async fn write_packet<'a>(&mut self, src: &'a [u8]) -> Result<()> {
-        log::debug!("Write {:?}", src);
+    pub async fn write_packet<'a, T>(&mut self, msg: &T) -> Result<()>
+    where
+        T: ZvtSerializer + Sync + Send,
+        encoding::Default: encoding::Encoding<T>,
+    {
+        let bytes = msg.zvt_serialize();
+        log::debug!("Write {:?}", bytes);
         self.source
-            .write_all(src)
+            .write_all(&bytes)
             .await
             .map_err(|e| anyhow::anyhow!("Failed to write {:?}", e))
+    }
+}
+
+impl<S> PacketWriter<S>
+where
+    S: AsyncWriteExt + AsyncReadExt + Unpin + Send,
+{
+    pub async fn write_packet_with_ack<'a, T>(&mut self, msg: &T) -> Result<()>
+    where
+        T: ZvtSerializer + Sync + Send,
+        encoding::Default: encoding::Encoding<T>,
+    {
+        self.write_packet(msg).await?;
+
+        let bytes = self.read_packet().await?;
+        let _ = Ack::zvt_parse(&bytes)?;
+
+        Ok(())
     }
 }

@@ -1,6 +1,6 @@
-use crate::logging::{AsyncReadPacket, AsyncWritePacket};
-use crate::sequences::{write_with_ack_async, Sequence};
-use crate::{packets, ZvtEnum, ZvtParser, ZvtSerializer};
+use crate::logging::PacketWriter;
+use crate::sequences::Sequence;
+use crate::{packets, ZvtEnum, ZvtParser};
 use anyhow::Result;
 use async_stream::try_stream;
 use std::boxed::Box;
@@ -11,6 +11,7 @@ use std::marker::Unpin;
 use std::os::unix::fs::FileExt;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio_stream::Stream;
 use zvt_builder::ZVTError;
 
@@ -94,10 +95,10 @@ impl WriteFile {
         path: PathBuf,
         password: usize,
         adpu_size: u32,
-        src: &mut Source,
+        src: &mut PacketWriter<Source>,
     ) -> Pin<Box<impl Stream<Item = Result<WriteFileResponse>> + '_>>
     where
-        Source: AsyncReadPacket + AsyncWritePacket + Unpin + Send,
+        Source: AsyncReadExt + AsyncWriteExt + Unpin + Send,
     {
         // Protocol from the handbook (the numbering is not part of the handbook)
         // 1.1 ECR->PT: Send over the list of all files with their sizes.
@@ -131,7 +132,7 @@ impl WriteFile {
             };
 
             // 1.1. and 1.2
-            write_with_ack_async(&packet, src).await?;
+            src.write_packet_with_ack(&packet).await?;
             let mut buf = vec![0; adpu_size as usize];
             println!("the length is {}", buf.len());
 
@@ -144,13 +145,13 @@ impl WriteFile {
 
                 match response {
                     WriteFileResponse::CompletionData(_) => {
-                        src.write_packet(&packets::Ack {}.zvt_serialize()).await?;
+                        src.write_packet(&packets::Ack {}).await?;
 
                         yield response;
                         break;
                     }
                     WriteFileResponse::Abort(_) => {
-                        src.write_packet(&packets::Ack {}.zvt_serialize()).await?;
+                        src.write_packet(&packets::Ack {}).await?;
 
                         yield response;
                         break;
@@ -193,7 +194,7 @@ impl WriteFile {
                                 }),
                             }),
                         };
-                        src.write_packet(&packet.zvt_serialize()).await?;
+                        src.write_packet(&packet).await?;
 
                         yield response;
                     }
