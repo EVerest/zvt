@@ -1,4 +1,4 @@
-use crate::logging::{AsyncReadExt, AsyncWriteExt};
+use crate::logging::{AsyncReadPacket, AsyncWritePacket};
 use crate::packets;
 use crate::{encoding, ZvtEnum, ZvtParser, ZvtSerializer};
 use anyhow::Result;
@@ -8,45 +8,43 @@ use std::boxed::Box;
 use std::marker::Unpin;
 use std::pin::Pin;
 
-pub async fn read_packet_async(src: &mut Pin<&mut impl AsyncReadExt>) -> Result<Vec<u8>> {
-    let mut buf = vec![0; 3];
-    src.read_exact(&mut buf).await?;
+// pub async fn read_packet_async(src: &mut Pin<&mut impl AsyncReadPacket>) -> Result<Vec<u8>> {
+//     let mut buf = vec![0; 3];
+//     src.read_exact(&mut buf).await?;
 
-    // Get the len.
-    let len = if buf[2] == 0xff {
-        buf.resize(5, 0);
-        src.read_exact(&mut buf[3..5]).await?;
-        u16::from_le_bytes(buf[3..5].try_into().unwrap()) as usize
-    } else {
-        buf[2] as usize
-    };
+//     // Get the len.
+//     let len = if buf[2] == 0xff {
+//         buf.resize(5, 0);
+//         src.read_exact(&mut buf[3..5]).await?;
+//         u16::from_le_bytes(buf[3..5].try_into().unwrap()) as usize
+//     } else {
+//         buf[2] as usize
+//     };
 
-    let start = buf.len();
-    buf.resize(start + len, 0);
-    src.read_exact(&mut buf[start..]).await?;
+//     let start = buf.len();
+//     buf.resize(start + len, 0);
+//     src.read_exact(&mut buf[start..]).await?;
 
-    Ok(buf.to_vec())
-}
+//     Ok(buf.to_vec())
+// }
 
 #[derive(ZvtEnum)]
 enum Ack {
     Ack(packets::Ack),
 }
 
-pub async fn write_with_ack_async<T>(
-    p: &T,
-    src: &mut Pin<&mut (impl AsyncReadExt + AsyncWriteExt)>,
-) -> Result<()>
+pub async fn write_with_ack_async<T, Source>(p: &T, src: &mut Source) -> Result<()>
 where
     T: ZvtSerializer + Sync + Send,
     encoding::Default: encoding::Encoding<T>,
+    Source: AsyncWritePacket + AsyncReadPacket + Unpin + Send,
 {
     // We declare the bytes as a separate variable to help the compiler to
     // figure out that we can send stuff between threads.
     let bytes = p.zvt_serialize();
-    src.write_all(&bytes).await?;
+    src.write_packet(&bytes).await?;
 
-    let bytes = read_packet_async(src).await?;
+    let bytes = src.read_packet().await?;
     let _ = Ack::zvt_parse(&bytes)?;
     Ok(())
 }
@@ -77,18 +75,17 @@ where
         src: &'a mut Source,
     ) -> Pin<Box<dyn futures::Stream<Item = Result<Self::Output>> + Send + 'a>>
     where
-        Source: AsyncReadExt + AsyncWriteExt + Unpin + Send,
+        Source: AsyncReadPacket + AsyncWritePacket + Unpin + Send,
         Self: 'a,
     {
         let s = try_stream! {
             // This pin has nothing to do with the fact that we return a Stream
-            // but is needed to access methods like `write_all`.
-            tokio::pin!(src);
-            write_with_ack_async(input, &mut src).await?;
-            let bytes = read_packet_async(&mut src).await?;
+            // but is needed to access methods like `write_packet`.
+            write_with_ack_async(input, src).await?;
+            let bytes = src.read_packet().await?;
             let packet = Self::Output::zvt_parse(&bytes)?;
             // Write the response.
-            src.write_all(&packets::Ack {}.zvt_serialize()).await?;
+            src.write_packet(&packets::Ack {}.zvt_serialize()).await?;
             yield packet;
         };
         Box::pin(s)
@@ -136,17 +133,16 @@ impl Sequence for ReadCard {
         src: &'a mut Source,
     ) -> Pin<Box<dyn futures::Stream<Item = Result<Self::Output>> + Send + 'a>>
     where
-        Source: AsyncReadExt + AsyncWriteExt + Unpin + Send,
+        Source: AsyncReadPacket + AsyncWritePacket + Unpin + Send,
         Self: 'a,
     {
         let s = try_stream! {
-            tokio::pin!(src);
-            write_with_ack_async(input, &mut src).await?;
+            write_with_ack_async(input, src).await?;
             loop {
-                let bytes = read_packet_async(&mut src).await?;
+                let bytes = src.read_packet().await?;
                 let packet = ReadCardResponse::zvt_parse(&bytes)?;
                 // Write the response.
-                src.write_all(&packets::Ack {}.zvt_serialize()).await?;
+                src.write_packet(&packets::Ack {}.zvt_serialize()).await?;
 
                 match packet {
                     ReadCardResponse::StatusInformation(_) | ReadCardResponse::Abort(_) => {
@@ -191,19 +187,18 @@ impl Sequence for Initialization {
         src: &'a mut Source,
     ) -> Pin<Box<dyn Stream<Item = Result<Self::Output>> + Send + 'a>>
     where
-        Source: AsyncReadExt + AsyncWriteExt + Unpin + Send,
+        Source: AsyncReadPacket + AsyncWritePacket + Unpin + Send,
         Self: 'a,
     {
         let s = try_stream! {
-            tokio::pin!(src);
             // 2.18.1
-            write_with_ack_async(input, &mut src).await?;
+            write_with_ack_async(input, src).await?;
             loop {
-                let bytes = read_packet_async(&mut src).await?;
+                let bytes = src.read_packet().await?;
                 let response = InitializationResponse::zvt_parse(&bytes)?;
 
                 // Every message requires an Ack.
-                src.write_all(&packets::Ack {}.zvt_serialize()).await?;
+                src.write_packet(&packets::Ack {}.zvt_serialize()).await?;
 
                 match response {
                     InitializationResponse::CompletionData(_)
@@ -298,19 +293,18 @@ impl Sequence for Diagnosis {
         src: &'a mut Source,
     ) -> Pin<Box<dyn Stream<Item = Result<Self::Output>> + Send + 'a>>
     where
-        Source: AsyncReadExt + AsyncWriteExt + Unpin + Send,
+        Source: AsyncReadPacket + AsyncWritePacket + Unpin + Send,
         Self: 'a,
     {
         let s = try_stream! {
-            tokio::pin!(src);
             // 2.18.1
-            write_with_ack_async(input, &mut src).await?;
+            write_with_ack_async(input, src).await?;
             loop {
-                let bytes = read_packet_async(&mut src).await?;
+                let bytes = src.read_packet().await?;
                 let response = DiagnosisResponse::zvt_parse(&bytes)?;
 
                 // Every message requires an Ack.
-                src.write_all(&packets::Ack {}.zvt_serialize()).await?;
+                src.write_packet(&packets::Ack {}.zvt_serialize()).await?;
 
                 match response {
                     DiagnosisResponse::CompletionData(_)
@@ -364,20 +358,19 @@ impl Sequence for EndOfDay {
         src: &'a mut Source,
     ) -> Pin<Box<dyn Stream<Item = Result<Self::Output>> + Send + 'a>>
     where
-        Source: AsyncReadExt + AsyncWriteExt + Unpin + Send,
+        Source: AsyncReadPacket + AsyncWritePacket + Unpin + Send,
         Self: 'a,
     {
         let s = try_stream! {
-            tokio::pin!(src);
             // 2.16.1
-            write_with_ack_async(input, &mut src).await?;
+            write_with_ack_async(input, src).await?;
 
             loop {
-                let bytes = read_packet_async(&mut src).await?;
+                let bytes = src.read_packet().await?;
                 let packet = EndOfDayResponse::zvt_parse(&bytes)?;
 
                 // Write the response.
-                src.write_all(&packets::Ack {}.zvt_serialize()).await?;
+                src.write_packet(&packets::Ack {}.zvt_serialize()).await?;
                 match packet {
                     EndOfDayResponse::CompletionData(_) | EndOfDayResponse::Abort(_) => {
                         yield packet;
@@ -431,18 +424,17 @@ impl Sequence for Reservation {
         src: &'a mut Source,
     ) -> Pin<Box<dyn Stream<Item = Result<Self::Output>> + Send + 'a>>
     where
-        Source: AsyncReadExt + AsyncWriteExt + Unpin + Send,
+        Source: AsyncReadPacket + AsyncWritePacket + Unpin + Send,
         Self: 'a,
     {
         let s = try_stream! {
-            tokio::pin!(src);
             // 2.8
-            write_with_ack_async(input, &mut src).await?;
+            write_with_ack_async(input, src).await?;
 
             loop {
-                let bytes = read_packet_async(&mut src).await?;
+                let bytes = src.read_packet().await?;
                 let packet = AuthorizationResponse::zvt_parse(&bytes)?;
-                src.write_all(&packets::Ack {}.zvt_serialize()).await?;
+                src.write_packet(&packets::Ack {}.zvt_serialize()).await?;
                 match packet {
                     AuthorizationResponse::CompletionData(_) | AuthorizationResponse::Abort(_) => {
                         yield packet;
@@ -502,17 +494,16 @@ impl Sequence for PartialReversal {
         src: &'a mut Source,
     ) -> Pin<Box<dyn Stream<Item = Result<Self::Output>> + Send + 'a>>
     where
-        Source: AsyncReadExt + AsyncWriteExt + Unpin + Send,
+        Source: AsyncReadPacket + AsyncWritePacket + Unpin + Send,
         Self: 'a,
     {
         let s = try_stream! {
-            tokio::pin!(src);
-            write_with_ack_async(input, &mut src).await?;
+            write_with_ack_async(input, src).await?;
 
             loop {
-                let bytes = read_packet_async(&mut src).await?;
+                let bytes = src.read_packet().await?;
                 let packet = PartialReversalResponse::zvt_parse(&bytes)?;
-                src.write_all(&packets::Ack {}.zvt_serialize()).await?;
+                src.write_packet(&packets::Ack {}.zvt_serialize()).await?;
                 match packet {
                     PartialReversalResponse::CompletionData(_)
                     | PartialReversalResponse::PartialReversalAbort(_) => {
@@ -542,17 +533,16 @@ impl Sequence for PreAuthReversal {
         src: &'a mut Source,
     ) -> Pin<Box<dyn Stream<Item = Result<Self::Output>> + Send + 'a>>
     where
-        Source: AsyncReadExt + AsyncWriteExt + Unpin + Send,
+        Source: AsyncReadPacket + AsyncWritePacket + Unpin + Send,
         Self: 'a,
     {
         let s = try_stream! {
-            tokio::pin!(src);
-            write_with_ack_async(input, &mut src).await?;
+            write_with_ack_async(input, src).await?;
 
             loop {
-                let bytes = read_packet_async(&mut src).await?;
+                let bytes = src.read_packet().await?;
                 let packet = PartialReversalResponse::zvt_parse(&bytes)?;
-                src.write_all(&packets::Ack {}.zvt_serialize()).await?;
+                src.write_packet(&packets::Ack {}.zvt_serialize()).await?;
                 match packet {
                     PartialReversalResponse::CompletionData(_)
                     | PartialReversalResponse::PartialReversalAbort(_) => {
@@ -593,17 +583,16 @@ impl Sequence for PrintSystemConfiguration {
         src: &'a mut Source,
     ) -> Pin<Box<dyn Stream<Item = Result<Self::Output>> + Send + 'a>>
     where
-        Source: AsyncReadExt + AsyncWriteExt + Unpin + Send,
+        Source: AsyncReadPacket + AsyncWritePacket + Unpin + Send,
         Self: 'a,
     {
         let s = try_stream! {
-            tokio::pin!(src);
-            write_with_ack_async(input, &mut src).await?;
+            write_with_ack_async(input, src).await?;
 
             loop {
-                let bytes = read_packet_async(&mut src).await?;
+                let bytes = src.read_packet().await?;
                 let packet = PrintSystemConfigurationResponse::zvt_parse(&bytes)?;
-                src.write_all(&packets::Ack {}.zvt_serialize()).await?;
+                src.write_packet(&packets::Ack {}.zvt_serialize()).await?;
                 match packet {
                     PrintSystemConfigurationResponse::CompletionData(_) => {
                         yield packet;
@@ -664,17 +653,16 @@ impl Sequence for StatusEnquiry {
         src: &'a mut Source,
     ) -> Pin<Box<dyn Stream<Item = Result<Self::Output>> + Send + 'a>>
     where
-        Source: AsyncReadExt + AsyncWriteExt + Unpin + Send,
+        Source: AsyncReadPacket + AsyncWritePacket + Unpin + Send,
         Self: 'a,
     {
         let s = try_stream! {
-            tokio::pin!(src);
-            write_with_ack_async(input, &mut src).await?;
+            write_with_ack_async(input, src).await?;
 
             loop {
-                let bytes = read_packet_async(&mut src).await?;
+                let bytes = src.read_packet().await?;
                 let packet = StatusEnquiryResponse::zvt_parse(&bytes)?;
-                src.write_all(&packets::Ack {}.zvt_serialize()).await?;
+                src.write_packet(&packets::Ack {}.zvt_serialize()).await?;
                 match packet {
                     StatusEnquiryResponse::CompletionData(_) => {
                         yield packet;

@@ -1,25 +1,59 @@
+use anyhow::Result;
 use async_trait::async_trait;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-/// Trait which will log the byte payload after receiving.
+pub struct PacketWriter<Source> {
+    pub source: Source,
+}
+
 #[async_trait]
-pub trait AsyncReadExt: tokio::io::AsyncReadExt + Unpin + Send {
-    async fn read_exact<'a>(&'a mut self, buf: &'a mut [u8]) -> tokio::io::Result<usize> {
-        let res = <Self as tokio::io::AsyncReadExt>::read_exact(self, buf).await;
-        log::debug!("The length is {} and the result is {:?}", buf.len(), res);
+pub trait AsyncReadPacket {
+    async fn read_packet(&mut self) -> Result<Vec<u8>>;
+}
+
+#[async_trait]
+impl<S> AsyncReadPacket for PacketWriter<S>
+where
+    S: AsyncReadExt + Unpin + Send,
+{
+    async fn read_packet(&mut self) -> Result<Vec<u8>> {
+        let mut buf = vec![0; 3];
+        self.source.read_exact(&mut buf).await?;
+
+        // Get the len.
+        let len = if buf[2] == 0xff {
+            buf.resize(5, 0);
+            self.source.read_exact(&mut buf[3..5]).await?;
+            u16::from_le_bytes(buf[3..5].try_into().unwrap()) as usize
+        } else {
+            buf[2] as usize
+        };
+
+        let start = buf.len();
+        buf.resize(start + len, 0);
+        self.source.read_exact(&mut buf[start..]).await?;
+
         log::debug!("Read {:?}", buf);
-        res
+
+        Ok(buf.to_vec())
     }
 }
 
-impl<R: tokio::io::AsyncReadExt + ?Sized + Unpin + Send> AsyncReadExt for R {}
-
-/// Trait which will log the byte payload before transmitting.
 #[async_trait]
-pub trait AsyncWriteExt: tokio::io::AsyncWriteExt + Unpin + Send {
-    async fn write_all<'a>(&'a mut self, src: &'a [u8]) -> tokio::io::Result<()> {
-        log::debug!("Write {src:?}");
-        <Self as tokio::io::AsyncWriteExt>::write_all(self, src).await
-    }
+pub trait AsyncWritePacket {
+    async fn write_packet<'a>(&mut self, buf: &'a [u8]) -> Result<()>;
 }
 
-impl<W: tokio::io::AsyncWriteExt + ?Sized + Unpin + Send> AsyncWriteExt for W {}
+#[async_trait]
+impl<S> AsyncWritePacket for PacketWriter<S>
+where
+    S: AsyncWriteExt + Unpin + Send,
+{
+    async fn write_packet<'a>(&mut self, src: &'a [u8]) -> Result<()> {
+        log::debug!("Write {:?}", src);
+        self.source
+            .write_all(src)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to write {:?}", e))
+    }
+}

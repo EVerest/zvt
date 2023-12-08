@@ -1,5 +1,5 @@
-use crate::logging::{AsyncReadExt, AsyncWriteExt};
-use crate::sequences::{read_packet_async, write_with_ack_async, Sequence};
+use crate::logging::{AsyncReadPacket, AsyncWritePacket};
+use crate::sequences::{write_with_ack_async, Sequence};
 use crate::{packets, ZvtEnum, ZvtParser, ZvtSerializer};
 use anyhow::Result;
 use async_stream::try_stream;
@@ -97,7 +97,7 @@ impl WriteFile {
         src: &mut Source,
     ) -> Pin<Box<impl Stream<Item = Result<WriteFileResponse>> + '_>>
     where
-        Source: AsyncReadExt + AsyncWriteExt + Unpin,
+        Source: AsyncReadPacket + AsyncWritePacket + Unpin + Send,
     {
         // Protocol from the handbook (the numbering is not part of the handbook)
         // 1.1 ECR->PT: Send over the list of all files with their sizes.
@@ -108,8 +108,6 @@ impl WriteFile {
         // 3.0 PT->ERC replies with Completion.
 
         let s = try_stream! {
-            tokio::pin!(src);
-
             use super::packets::tlv::File as TlvFile;
             let files = convert_dir(&path)?;
             let mut packets = Vec::with_capacity(files.len());
@@ -133,26 +131,26 @@ impl WriteFile {
             };
 
             // 1.1. and 1.2
-            write_with_ack_async(&packet, &mut src).await?;
+            write_with_ack_async(&packet, src).await?;
             let mut buf = vec![0; adpu_size as usize];
             println!("the length is {}", buf.len());
 
             loop {
                 // Get the data.
-                let bytes = read_packet_async(&mut src).await?;
+                let bytes = src.read_packet().await?;
                 println!("The packet is {:?}", bytes);
 
                 let response = WriteFileResponse::zvt_parse(&bytes)?;
 
                 match response {
                     WriteFileResponse::CompletionData(_) => {
-                        src.write_all(&packets::Ack {}.zvt_serialize()).await?;
+                        src.write_packet(&packets::Ack {}.zvt_serialize()).await?;
 
                         yield response;
                         break;
                     }
                     WriteFileResponse::Abort(_) => {
-                        src.write_all(&packets::Ack {}.zvt_serialize()).await?;
+                        src.write_packet(&packets::Ack {}.zvt_serialize()).await?;
 
                         yield response;
                         break;
@@ -195,7 +193,7 @@ impl WriteFile {
                                 }),
                             }),
                         };
-                        src.write_all(&packet.zvt_serialize()).await?;
+                        src.write_packet(&packet.zvt_serialize()).await?;
 
                         yield response;
                     }
