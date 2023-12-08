@@ -8,26 +8,6 @@ use std::boxed::Box;
 use std::marker::Unpin;
 use std::pin::Pin;
 
-// pub async fn read_packet_async(src: &mut Pin<&mut impl AsyncReadPacket>) -> Result<Vec<u8>> {
-//     let mut buf = vec![0; 3];
-//     src.read_exact(&mut buf).await?;
-
-//     // Get the len.
-//     let len = if buf[2] == 0xff {
-//         buf.resize(5, 0);
-//         src.read_exact(&mut buf[3..5]).await?;
-//         u16::from_le_bytes(buf[3..5].try_into().unwrap()) as usize
-//     } else {
-//         buf[2] as usize
-//     };
-
-//     let start = buf.len();
-//     buf.resize(start + len, 0);
-//     src.read_exact(&mut buf[start..]).await?;
-
-//     Ok(buf.to_vec())
-// }
-
 #[derive(ZvtEnum)]
 enum Ack {
     Ack(packets::Ack),
