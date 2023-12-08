@@ -11,11 +11,11 @@ pub enum Ack {
     Ack(packets::Ack),
 }
 
-pub struct PacketWriter<Source> {
+pub struct PacketTransport<Source> {
     pub source: Source,
 }
 
-impl<S> PacketWriter<S>
+impl<S> PacketTransport<S>
 where
     S: AsyncReadExt + Unpin + Send,
 {
@@ -46,7 +46,7 @@ where
     }
 }
 
-impl<S> PacketWriter<S>
+impl<S> PacketTransport<S>
 where
     S: AsyncWriteExt + Unpin + Send,
 {
@@ -65,7 +65,7 @@ where
     }
 }
 
-impl<S> PacketWriter<S>
+impl<S> PacketTransport<S>
 where
     S: AsyncWriteExt + AsyncReadExt + Unpin + Send,
 {

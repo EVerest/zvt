@@ -1,4 +1,4 @@
-use crate::logging::PacketWriter;
+use crate::io::PacketTransport;
 use crate::sequences::Sequence;
 use crate::{packets, ZvtEnum};
 use anyhow::Result;
@@ -95,7 +95,7 @@ impl WriteFile {
         path: PathBuf,
         password: usize,
         adpu_size: u32,
-        src: &mut PacketWriter<Source>,
+        src: &mut PacketTransport<Source>,
     ) -> Pin<Box<impl Stream<Item = Result<WriteFileResponse>> + '_>>
     where
         Source: AsyncReadExt + AsyncWriteExt + Unpin + Send,

@@ -1,4 +1,4 @@
-use crate::logging::PacketWriter;
+use crate::io::PacketTransport;
 use crate::packets;
 use crate::{encoding, ZvtEnum, ZvtParser, ZvtSerializer};
 use anyhow::Result;
@@ -32,7 +32,7 @@ where
 
     fn into_stream<'a, Source>(
         input: &'a Self::Input,
-        src: &'a mut PacketWriter<Source>,
+        src: &'a mut PacketTransport<Source>,
     ) -> Pin<Box<dyn futures::Stream<Item = Result<Self::Output>> + Send + 'a>>
     where
         Source: AsyncReadExt + AsyncWriteExt + Unpin + Send,
@@ -89,7 +89,7 @@ impl Sequence for ReadCard {
 
     fn into_stream<'a, Source>(
         input: &'a Self::Input,
-        src: &'a mut PacketWriter<Source>,
+        src: &'a mut PacketTransport<Source>,
     ) -> Pin<Box<dyn futures::Stream<Item = Result<Self::Output>> + Send + 'a>>
     where
         Source: AsyncReadExt + AsyncWriteExt + Unpin + Send,
@@ -142,7 +142,7 @@ impl Sequence for Initialization {
 
     fn into_stream<'a, Source>(
         input: &'a Self::Input,
-        src: &'a mut PacketWriter<Source>,
+        src: &'a mut PacketTransport<Source>,
     ) -> Pin<Box<dyn Stream<Item = Result<Self::Output>> + Send + 'a>>
     where
         Source: AsyncReadExt + AsyncWriteExt + Unpin + Send,
@@ -247,7 +247,7 @@ impl Sequence for Diagnosis {
 
     fn into_stream<'a, Source>(
         input: &'a Self::Input,
-        src: &'a mut PacketWriter<Source>,
+        src: &'a mut PacketTransport<Source>,
     ) -> Pin<Box<dyn Stream<Item = Result<Self::Output>> + Send + 'a>>
     where
         Source: AsyncReadExt + AsyncWriteExt + Unpin + Send,
@@ -311,7 +311,7 @@ impl Sequence for EndOfDay {
 
     fn into_stream<'a, Source>(
         input: &'a Self::Input,
-        src: &'a mut PacketWriter<Source>,
+        src: &'a mut PacketTransport<Source>,
     ) -> Pin<Box<dyn Stream<Item = Result<Self::Output>> + Send + 'a>>
     where
         Source: AsyncReadExt + AsyncWriteExt + Unpin + Send,
@@ -376,7 +376,7 @@ impl Sequence for Reservation {
 
     fn into_stream<'a, Source>(
         input: &'a Self::Input,
-        src: &'a mut PacketWriter<Source>,
+        src: &'a mut PacketTransport<Source>,
     ) -> Pin<Box<dyn Stream<Item = Result<Self::Output>> + Send + 'a>>
     where
         Source: AsyncReadExt + AsyncWriteExt + Unpin + Send,
@@ -445,7 +445,7 @@ impl Sequence for PartialReversal {
 
     fn into_stream<'a, Source>(
         input: &'a Self::Input,
-        src: &'a mut PacketWriter<Source>,
+        src: &'a mut PacketTransport<Source>,
     ) -> Pin<Box<dyn Stream<Item = Result<Self::Output>> + Send + 'a>>
     where
         Source: AsyncReadExt + AsyncWriteExt + Unpin + Send,
@@ -483,7 +483,7 @@ impl Sequence for PreAuthReversal {
 
     fn into_stream<'a, Source>(
         input: &'a Self::Input,
-        src: &'a mut PacketWriter<Source>,
+        src: &'a mut PacketTransport<Source>,
     ) -> Pin<Box<dyn Stream<Item = Result<Self::Output>> + Send + 'a>>
     where
         Source: AsyncReadExt + AsyncWriteExt + Unpin + Send,
@@ -532,7 +532,7 @@ impl Sequence for PrintSystemConfiguration {
 
     fn into_stream<'a, Source>(
         input: &'a Self::Input,
-        src: &'a mut PacketWriter<Source>,
+        src: &'a mut PacketTransport<Source>,
     ) -> Pin<Box<dyn Stream<Item = Result<Self::Output>> + Send + 'a>>
     where
         Source: AsyncReadExt + AsyncWriteExt + Unpin + Send,
@@ -601,7 +601,7 @@ impl Sequence for StatusEnquiry {
 
     fn into_stream<'a, Source>(
         input: &'a Self::Input,
-        src: &'a mut PacketWriter<Source>,
+        src: &'a mut PacketTransport<Source>,
     ) -> Pin<Box<dyn Stream<Item = Result<Self::Output>> + Send + 'a>>
     where
         Source: AsyncReadExt + AsyncWriteExt + Unpin + Send,
