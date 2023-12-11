@@ -221,7 +221,7 @@ async fn status(socket: &mut PacketTransport) -> Result<()> {
     // Check the current version of the software
     let request = feig::packets::CVendFunctions {
         password: None,
-        instr: feig::packets::CVEND_FUNCTIONS_ENHANCED_SYSTEMS_INFO,
+        instr: feig::constants::CVendFunctions::SystemsInfo as u16,
     };
     let mut stream = feig::sequences::GetSystemInfo::into_stream(&request, socket);
     while let Some(response) = stream.next().await {
@@ -237,7 +237,7 @@ async fn status(socket: &mut PacketTransport) -> Result<()> {
 async fn factory_reset(socket: &mut PacketTransport, password: usize) -> Result<()> {
     let request = feig::packets::CVendFunctions {
         password: Some(password),
-        instr: feig::packets::CVEND_FUNCTIONS_ENHANCED_FACTORY_RESET,
+        instr: feig::constants::CVendFunctions::FactoryReset as u16,
     };
     let mut stream = feig::sequences::FactoryReset::into_stream(&request, socket);
     while let Some(response) = stream.next().await {

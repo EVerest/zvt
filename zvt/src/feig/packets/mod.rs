@@ -74,9 +74,6 @@ pub struct CVendFunctions {
     pub instr: u16,
 }
 
-pub const CVEND_FUNCTIONS_ENHANCED_SYSTEMS_INFO: u16 = 1;
-pub const CVEND_FUNCTIONS_ENHANCED_FACTORY_RESET: u16 = 0x0255;
-
 #[derive(Debug, PartialEq, Zvt)]
 #[zvt_control_field(class = 0x80, instr = 0x00)]
 pub struct WriteData {
