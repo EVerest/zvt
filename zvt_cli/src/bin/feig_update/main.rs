@@ -5,7 +5,7 @@ use std::fs::read_to_string;
 use std::path::{Path, PathBuf};
 use tokio::net::TcpStream;
 use tokio_stream::StreamExt;
-use zvt::{feig, packets, sequences, sequences::Sequence};
+use zvt::{feig, io, packets, sequences, sequences::Sequence};
 
 #[derive(FromArgs, Debug)]
 /// Updates a feig terminal.
@@ -54,7 +54,8 @@ async fn main() -> Result<()> {
     let args: Args = argh::from_env();
 
     // Connect to the payment terminal.
-    let mut socket = TcpStream::connect(&args.ip_address).await?;
+    let source = TcpStream::connect(&args.ip_address).await?;
+    let mut socket = io::PacketTransport { source };
     const MAX_LEN_ADPU: u16 = 1u16 << 15;
     let registration = packets::Registration {
         password: args.password,

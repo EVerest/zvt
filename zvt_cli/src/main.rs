@@ -7,6 +7,8 @@ use tokio_stream::StreamExt;
 use zvt::sequences::Sequence;
 use zvt::{feig, packets, sequences};
 
+type PacketTransport = zvt::io::PacketTransport<TcpStream>;
+
 #[derive(FromArgs, PartialEq, Debug)]
 #[argh(subcommand)]
 enum SubCommands {
@@ -215,7 +217,7 @@ fn init_logger() {
         .init();
 }
 
-async fn status(socket: &mut TcpStream) -> Result<()> {
+async fn status(socket: &mut PacketTransport) -> Result<()> {
     // Check the current version of the software
     let request = feig::packets::CVendFunctions {
         password: None,
@@ -232,7 +234,7 @@ async fn status(socket: &mut TcpStream) -> Result<()> {
     Ok(())
 }
 
-async fn factory_reset(socket: &mut TcpStream, password: usize) -> Result<()> {
+async fn factory_reset(socket: &mut PacketTransport, password: usize) -> Result<()> {
     let request = feig::packets::CVendFunctions {
         password: Some(password),
         instr: feig::packets::CVEND_FUNCTIONS_ENHANCED_FACTORY_RESET,
@@ -248,7 +250,7 @@ async fn factory_reset(socket: &mut TcpStream, password: usize) -> Result<()> {
 }
 
 async fn registration(
-    socket: &mut TcpStream,
+    socket: &mut PacketTransport,
     password: usize,
     args: &RegistrationArgs,
 ) -> Result<()> {
@@ -270,7 +272,7 @@ async fn registration(
 }
 
 async fn set_terminal_id(
-    socket: &mut TcpStream,
+    socket: &mut PacketTransport,
     password: usize,
     args: &SetTerminalIdArgs,
 ) -> Result<()> {
@@ -290,7 +292,7 @@ async fn set_terminal_id(
     Ok(())
 }
 
-async fn initialization(socket: &mut TcpStream, password: usize) -> Result<()> {
+async fn initialization(socket: &mut PacketTransport, password: usize) -> Result<()> {
     let request = packets::Initialization { password };
 
     let mut stream = sequences::Initialization::into_stream(&request, socket);
@@ -307,7 +309,7 @@ async fn initialization(socket: &mut TcpStream, password: usize) -> Result<()> {
     Ok(())
 }
 
-async fn diagnosis(socket: &mut TcpStream, args: &DiagnosisArgs) -> Result<()> {
+async fn diagnosis(socket: &mut PacketTransport, args: &DiagnosisArgs) -> Result<()> {
     let request = packets::Diagnosis {
         tlv: Some(packets::tlv::Diagnosis {
             diagnosis_type: Some(args.diagnosis as u8),
@@ -328,7 +330,7 @@ async fn diagnosis(socket: &mut TcpStream, args: &DiagnosisArgs) -> Result<()> {
     Ok(())
 }
 
-async fn print_system_diagnosis(socket: &mut TcpStream) -> Result<()> {
+async fn print_system_diagnosis(socket: &mut PacketTransport) -> Result<()> {
     let request = packets::PrintSystemConfiguration {};
     let mut stream = sequences::PrintSystemConfiguration::into_stream(&request, socket);
     while let Some(response) = stream.next().await {
@@ -342,7 +344,7 @@ async fn print_system_diagnosis(socket: &mut TcpStream) -> Result<()> {
     Ok(())
 }
 
-async fn end_of_day(socket: &mut TcpStream, password: usize) -> Result<()> {
+async fn end_of_day(socket: &mut PacketTransport, password: usize) -> Result<()> {
     let request = packets::EndOfDay { password };
     let mut stream = sequences::EndOfDay::into_stream(&request, socket);
     while let Some(response) = stream.next().await {
@@ -358,7 +360,7 @@ async fn end_of_day(socket: &mut TcpStream, password: usize) -> Result<()> {
     Ok(())
 }
 
-async fn read_card(socket: &mut TcpStream, args: &ReadCardArgs) -> Result<()> {
+async fn read_card(socket: &mut PacketTransport, args: &ReadCardArgs) -> Result<()> {
     let request = packets::ReadCard {
         timeout_sec: args.timeout,
         card_type: Some(args.card_type),
@@ -426,7 +428,7 @@ fn prep_bmp_data(
         _ => bail!("Either none or both of bmp_data and bmp_prefix must be given."),
     }
 }
-async fn reservation(socket: &mut TcpStream, args: ReservationArgs) -> Result<()> {
+async fn reservation(socket: &mut PacketTransport, args: ReservationArgs) -> Result<()> {
     let tlv = prep_bmp_data(args.bmp_prefix, args.bmp_data)?;
     let request = packets::Reservation {
         currency: Some(args.currency_code),
@@ -450,7 +452,7 @@ async fn reservation(socket: &mut TcpStream, args: ReservationArgs) -> Result<()
     Ok(())
 }
 
-async fn partial_reversal(socket: &mut TcpStream, args: PartialReversalArgs) -> Result<()> {
+async fn partial_reversal(socket: &mut PacketTransport, args: PartialReversalArgs) -> Result<()> {
     let tlv = prep_bmp_data(args.bmp_prefix, args.bmp_data)?;
 
     let request = packets::PartialReversal {
@@ -480,7 +482,10 @@ async fn main() -> Result<()> {
     init_logger();
     let args: Args = argh::from_env();
 
-    let mut socket = TcpStream::connect(args.ip).await?;
+    let mut socket = {
+        let source = TcpStream::connect(args.ip).await?;
+        PacketTransport { source }
+    };
 
     match args.command {
         SubCommands::Status(_) => status(&mut socket).await?,

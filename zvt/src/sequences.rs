@@ -1,74 +1,13 @@
+use crate::io::PacketTransport;
 use crate::packets;
 use crate::{encoding, ZvtEnum, ZvtParser, ZvtSerializer};
 use anyhow::Result;
 use async_stream::try_stream;
 use futures::Stream;
-use log::{debug, log_enabled, Level::Debug};
 use std::boxed::Box;
 use std::marker::Unpin;
 use std::pin::Pin;
-use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
-
-pub async fn read_packet_async(src: &mut Pin<&mut impl AsyncReadExt>) -> Result<Vec<u8>> {
-    let mut buf = vec![0; 3];
-    src.read_exact(&mut buf).await?;
-
-    // Get the len.
-    let len = if buf[2] == 0xff {
-        buf.resize(5, 0);
-        src.read_exact(&mut buf[3..5]).await?;
-        u16::from_le_bytes(buf[3..5].try_into().unwrap()) as usize
-    } else {
-        buf[2] as usize
-    };
-
-    let start = buf.len();
-    buf.resize(start + len, 0);
-    src.read_exact(&mut buf[start..]).await?;
-
-    if log_enabled!(Debug) {
-        debug!("RX: {}", pretty_hex::simple_hex(&buf));
-    }
-
-    Ok(buf.to_vec())
-}
-
-pub async fn write_packet_async<T>(
-    drain: &mut Pin<&mut impl AsyncWriteExt>,
-    p: &T,
-) -> io::Result<()>
-where
-    T: ZvtSerializer + Sync + Send,
-    encoding::Default: encoding::Encoding<T>,
-{
-    let bytes = p.zvt_serialize();
-    if log_enabled!(Debug) {
-        debug!("TX: {}", pretty_hex::simple_hex(&bytes));
-    }
-    drain.write_all(&bytes).await
-}
-
-#[derive(ZvtEnum)]
-enum Ack {
-    Ack(packets::Ack),
-}
-
-pub async fn write_with_ack_async<T>(
-    p: &T,
-    src: &mut Pin<&mut (impl AsyncReadExt + AsyncWriteExt)>,
-) -> Result<()>
-where
-    T: ZvtSerializer + Sync + Send,
-    encoding::Default: encoding::Encoding<T>,
-{
-    // We declare the bytes as a separate variable to help the compiler to
-    // figure out that we can send stuff between threads.
-    write_packet_async(src, p).await?;
-
-    let bytes = read_packet_async(src).await?;
-    let _ = Ack::zvt_parse(&bytes)?;
-    Ok(())
-}
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 /// The trait for converting a sequence into a stream.
 ///
@@ -93,7 +32,7 @@ where
 
     fn into_stream<'a, Source>(
         input: &'a Self::Input,
-        src: &'a mut Source,
+        src: &'a mut PacketTransport<Source>,
     ) -> Pin<Box<dyn futures::Stream<Item = Result<Self::Output>> + Send + 'a>>
     where
         Source: AsyncReadExt + AsyncWriteExt + Unpin + Send,
@@ -101,13 +40,11 @@ where
     {
         let s = try_stream! {
             // This pin has nothing to do with the fact that we return a Stream
-            // but is needed to access methods like `write_all`.
-            tokio::pin!(src);
-            write_with_ack_async(input, &mut src).await?;
-            let bytes = read_packet_async(&mut src).await?;
-            let packet = Self::Output::zvt_parse(&bytes)?;
+            // but is needed to access methods like `write_packet`.
+            src.write_packet_with_ack(input).await?;
+            let packet = src.read_packet().await?;
             // Write the response.
-            write_packet_async::<packets::Ack>(&mut src, &packets::Ack {}).await?;
+            src.write_packet::<packets::Ack>(&packets::Ack {}).await?;
             yield packet;
         };
         Box::pin(s)
@@ -152,20 +89,18 @@ impl Sequence for ReadCard {
 
     fn into_stream<'a, Source>(
         input: &'a Self::Input,
-        src: &'a mut Source,
+        src: &'a mut PacketTransport<Source>,
     ) -> Pin<Box<dyn futures::Stream<Item = Result<Self::Output>> + Send + 'a>>
     where
         Source: AsyncReadExt + AsyncWriteExt + Unpin + Send,
         Self: 'a,
     {
         let s = try_stream! {
-            tokio::pin!(src);
-            write_with_ack_async(input, &mut src).await?;
+            src.write_packet_with_ack(input).await?;
             loop {
-                let bytes = read_packet_async(&mut src).await?;
-                let packet = ReadCardResponse::zvt_parse(&bytes)?;
+                let packet = src.read_packet().await?;
                 // Write the response.
-                write_packet_async(&mut src, &packets::Ack {}).await?;
+                src.write_packet(&packets::Ack {}).await?;
 
                 match packet {
                     ReadCardResponse::StatusInformation(_) | ReadCardResponse::Abort(_) => {
@@ -207,22 +142,20 @@ impl Sequence for Initialization {
 
     fn into_stream<'a, Source>(
         input: &'a Self::Input,
-        src: &'a mut Source,
+        src: &'a mut PacketTransport<Source>,
     ) -> Pin<Box<dyn Stream<Item = Result<Self::Output>> + Send + 'a>>
     where
         Source: AsyncReadExt + AsyncWriteExt + Unpin + Send,
         Self: 'a,
     {
         let s = try_stream! {
-            tokio::pin!(src);
             // 2.18.1
-            write_with_ack_async(input, &mut src).await?;
+            src.write_packet_with_ack(input).await?;
             loop {
-                let bytes = read_packet_async(&mut src).await?;
-                let response = InitializationResponse::zvt_parse(&bytes)?;
+                let response = src.read_packet().await?;
 
                 // Every message requires an Ack.
-                write_packet_async(&mut src, &packets::Ack {}).await?;
+                src.write_packet(&packets::Ack {}).await?;
 
                 match response {
                     InitializationResponse::CompletionData(_)
@@ -314,22 +247,20 @@ impl Sequence for Diagnosis {
 
     fn into_stream<'a, Source>(
         input: &'a Self::Input,
-        src: &'a mut Source,
+        src: &'a mut PacketTransport<Source>,
     ) -> Pin<Box<dyn Stream<Item = Result<Self::Output>> + Send + 'a>>
     where
         Source: AsyncReadExt + AsyncWriteExt + Unpin + Send,
         Self: 'a,
     {
         let s = try_stream! {
-            tokio::pin!(src);
             // 2.18.1
-            write_with_ack_async(input, &mut src).await?;
+            src.write_packet_with_ack(input).await?;
             loop {
-                let bytes = read_packet_async(&mut src).await?;
-                let response = DiagnosisResponse::zvt_parse(&bytes)?;
+                let response = src.read_packet().await?;
 
                 // Every message requires an Ack.
-                write_packet_async(&mut src, &packets::Ack {}).await?;
+                src.write_packet(&packets::Ack {}).await?;
 
                 match response {
                     DiagnosisResponse::CompletionData(_)
@@ -380,23 +311,21 @@ impl Sequence for EndOfDay {
 
     fn into_stream<'a, Source>(
         input: &'a Self::Input,
-        src: &'a mut Source,
+        src: &'a mut PacketTransport<Source>,
     ) -> Pin<Box<dyn Stream<Item = Result<Self::Output>> + Send + 'a>>
     where
         Source: AsyncReadExt + AsyncWriteExt + Unpin + Send,
         Self: 'a,
     {
         let s = try_stream! {
-            tokio::pin!(src);
             // 2.16.1
-            write_with_ack_async(input, &mut src).await?;
+            src.write_packet_with_ack(input).await?;
 
             loop {
-                let bytes = read_packet_async(&mut src).await?;
-                let packet = EndOfDayResponse::zvt_parse(&bytes)?;
+                let packet = src.read_packet().await?;
 
                 // Write the response.
-                write_packet_async(&mut src, &packets::Ack {}).await?;
+                src.write_packet(&packets::Ack {}).await?;
                 match packet {
                     EndOfDayResponse::CompletionData(_) | EndOfDayResponse::Abort(_) => {
                         yield packet;
@@ -447,21 +376,19 @@ impl Sequence for Reservation {
 
     fn into_stream<'a, Source>(
         input: &'a Self::Input,
-        src: &'a mut Source,
+        src: &'a mut PacketTransport<Source>,
     ) -> Pin<Box<dyn Stream<Item = Result<Self::Output>> + Send + 'a>>
     where
         Source: AsyncReadExt + AsyncWriteExt + Unpin + Send,
         Self: 'a,
     {
         let s = try_stream! {
-            tokio::pin!(src);
             // 2.8
-            write_with_ack_async(input, &mut src).await?;
+            src.write_packet_with_ack(input).await?;
 
             loop {
-                let bytes = read_packet_async(&mut src).await?;
-                let packet = AuthorizationResponse::zvt_parse(&bytes)?;
-                write_packet_async(&mut src, &packets::Ack {}).await?;
+                let packet = src.read_packet().await?;
+                src.write_packet(&packets::Ack {}).await?;
                 match packet {
                     AuthorizationResponse::CompletionData(_) | AuthorizationResponse::Abort(_) => {
                         yield packet;
@@ -518,20 +445,18 @@ impl Sequence for PartialReversal {
 
     fn into_stream<'a, Source>(
         input: &'a Self::Input,
-        src: &'a mut Source,
+        src: &'a mut PacketTransport<Source>,
     ) -> Pin<Box<dyn Stream<Item = Result<Self::Output>> + Send + 'a>>
     where
         Source: AsyncReadExt + AsyncWriteExt + Unpin + Send,
         Self: 'a,
     {
         let s = try_stream! {
-            tokio::pin!(src);
-            write_with_ack_async(input, &mut src).await?;
+            src.write_packet_with_ack(input).await?;
 
             loop {
-                let bytes = read_packet_async(&mut src).await?;
-                let packet = PartialReversalResponse::zvt_parse(&bytes)?;
-                write_packet_async(&mut src, &packets::Ack {}).await?;
+                let packet = src.read_packet().await?;
+                src.write_packet(&packets::Ack {}).await?;
                 match packet {
                     PartialReversalResponse::CompletionData(_)
                     | PartialReversalResponse::PartialReversalAbort(_) => {
@@ -558,20 +483,18 @@ impl Sequence for PreAuthReversal {
 
     fn into_stream<'a, Source>(
         input: &'a Self::Input,
-        src: &'a mut Source,
+        src: &'a mut PacketTransport<Source>,
     ) -> Pin<Box<dyn Stream<Item = Result<Self::Output>> + Send + 'a>>
     where
         Source: AsyncReadExt + AsyncWriteExt + Unpin + Send,
         Self: 'a,
     {
         let s = try_stream! {
-            tokio::pin!(src);
-            write_with_ack_async(input, &mut src).await?;
+            src.write_packet_with_ack(input).await?;
 
             loop {
-                let bytes = read_packet_async(&mut src).await?;
-                let packet = PartialReversalResponse::zvt_parse(&bytes)?;
-                write_packet_async(&mut src, &packets::Ack {}).await?;
+                let packet = src.read_packet().await?;
+                src.write_packet(&packets::Ack {}).await?;
                 match packet {
                     PartialReversalResponse::CompletionData(_)
                     | PartialReversalResponse::PartialReversalAbort(_) => {
@@ -609,20 +532,18 @@ impl Sequence for PrintSystemConfiguration {
 
     fn into_stream<'a, Source>(
         input: &'a Self::Input,
-        src: &'a mut Source,
+        src: &'a mut PacketTransport<Source>,
     ) -> Pin<Box<dyn Stream<Item = Result<Self::Output>> + Send + 'a>>
     where
         Source: AsyncReadExt + AsyncWriteExt + Unpin + Send,
         Self: 'a,
     {
         let s = try_stream! {
-            tokio::pin!(src);
-            write_with_ack_async(input, &mut src).await?;
+            src.write_packet_with_ack(input).await?;
 
             loop {
-                let bytes = read_packet_async(&mut src).await?;
-                let packet = PrintSystemConfigurationResponse::zvt_parse(&bytes)?;
-                write_packet_async(&mut src, &packets::Ack {}).await?;
+                let packet = src.read_packet().await?;
+                src.write_packet(&packets::Ack {}).await?;
                 match packet {
                     PrintSystemConfigurationResponse::CompletionData(_) => {
                         yield packet;
@@ -680,20 +601,18 @@ impl Sequence for StatusEnquiry {
 
     fn into_stream<'a, Source>(
         input: &'a Self::Input,
-        src: &'a mut Source,
+        src: &'a mut PacketTransport<Source>,
     ) -> Pin<Box<dyn Stream<Item = Result<Self::Output>> + Send + 'a>>
     where
         Source: AsyncReadExt + AsyncWriteExt + Unpin + Send,
         Self: 'a,
     {
         let s = try_stream! {
-            tokio::pin!(src);
-            write_with_ack_async(input, &mut src).await?;
+            src.write_packet_with_ack(input).await?;
 
             loop {
-                let bytes = read_packet_async(&mut src).await?;
-                let packet = StatusEnquiryResponse::zvt_parse(&bytes)?;
-                write_packet_async(&mut src, &packets::Ack {}).await?;
+                let packet = src.read_packet().await?;
+                src.write_packet(&packets::Ack {}).await?;
                 match packet {
                     StatusEnquiryResponse::CompletionData(_) => {
                         yield packet;
