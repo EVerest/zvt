@@ -298,7 +298,7 @@ async fn initialization(socket: &mut TcpStream, password: usize) -> Result<()> {
         use sequences::InitializationResponse::*;
         match response? {
             IntermediateStatusInformation(data) => log::info!("{data:#?}"),
-            PrintLine(data) => log::info!("{data:#?}"),
+            PrintLine(data) => log::info!("{}", data.text),
             PrintTextBlock(data) => log::info!("{data:#?}"),
             CompletionData(data) => log::info!("{data:#?}"),
             Abort(_) => bail!("Received Abort."),
