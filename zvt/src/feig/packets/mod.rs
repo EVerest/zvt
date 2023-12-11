@@ -65,6 +65,8 @@ pub struct WriteFile {
 #[derive(Debug, PartialEq, Zvt)]
 #[zvt_control_field(class = 0x0f, instr = 0xa1)]
 pub struct CVendFunctions {
+    // Needed for most functions, but not enhanced system info. See table on page 19 in Feig
+    // specific manual.
     #[zvt_bmp(length = length::Fixed<3>, encoding = encoding::Bcd)]
     pub password: Option<usize>,
 
