@@ -1,0 +1,16 @@
+load("@rules_rust//rust:defs.bzl", "rust_binary", "rust_library", "rust_test")
+load("@crate_index//:defs.bzl", "all_crate_deps")
+
+rust_binary(
+    name = "zvt_cli",
+    srcs = glob(["src/main.rs"]),
+    edition = "2021",
+    deps = all_crate_deps() + ["//zvt"],
+)
+
+rust_binary(
+    name = "feig_update",
+    srcs = glob(["src/bin/feig_update/main.rs"]),
+    edition = "2021",
+    deps = all_crate_deps() + ["//zvt"],
+)

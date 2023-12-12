@@ -1,5 +1,5 @@
 [package]
-name = "zvt"
+name = "zvt_cli"
 edition = "2021"
 authors.workspace = true
 categories.workspace = true
@@ -13,12 +13,11 @@ A crate to interact with payment terminals (ECRs) that use the ZVT protocol, inc
 
 [dependencies]
 anyhow = "1.0.70"
-async-stream = "0.3.5"
-chrono = "0.4.24"
-futures = "0.3.28"
+argh = "0.1.12"
+env_logger = "0.10.0"
 log = "0.4.19"
-pretty-hex = "0.4.0"
+serde = { version = "1.0.185", features = ["derive"] }
+serde_json = "1.0.105"
 tokio = { version = "1.29.1", features = ["net", "io-util", "rt-multi-thread", "macros"] }
 tokio-stream = "0.1.14"
-zvt_builder = { version = "0.1.0", path = "../zvt_builder" }
-zvt_derive = { version = "0.1.0", path = "../zvt_derive" }
+zvt = { version = "0.1.0", path = "../zvt" }

@@ -40,7 +40,7 @@ where
         buf.resize(start + len, 0);
         self.source.read_exact(&mut buf[start..]).await?;
 
-        log::debug!("Read {:?}", buf);
+        log::debug!("RX: {}", pretty_hex::simple_hex(&buf));
 
         Ok(T::zvt_parse(&buf)?)
     }
@@ -57,7 +57,7 @@ where
         encoding::Default: encoding::Encoding<T>,
     {
         let bytes = msg.zvt_serialize();
-        log::debug!("Write {:?}", bytes);
+        log::debug!("TX: {}", pretty_hex::simple_hex(&bytes));
         self.source
             .write_all(&bytes)
             .await

@@ -201,3 +201,15 @@ impl WriteFile {
         Box::pin(s)
     }
 }
+
+pub struct FactoryReset;
+
+#[derive(Debug, ZvtEnum)]
+pub enum FactoryResetResponse {
+    CompletionData(packets::CompletionData),
+}
+
+impl Sequence for FactoryReset {
+    type Input = super::packets::CVendFunctions;
+    type Output = FactoryResetResponse;
+}

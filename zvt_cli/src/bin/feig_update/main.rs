@@ -1,34 +1,35 @@
 use anyhow::Result;
-use clap::Parser;
+use argh::FromArgs;
 use serde::Deserialize;
 use std::fs::read_to_string;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tokio::net::TcpStream;
 use tokio_stream::StreamExt;
 use zvt::{feig, io, packets, sequences, sequences::Sequence};
 
+#[derive(FromArgs, Debug)]
 /// Updates a feig terminal.
-#[derive(Parser)]
 struct Args {
-    /// The ip and port of the payment terminal.
-    #[clap(long, default_value = "localhost:22000")]
+    /// ip and port of the payment terminal.
+    #[argh(option, default = "\"localhost:22000\".to_string()")]
     ip_address: String,
 
-    /// The password of the payment terminal. The password is a 6-digits code,
+    /// password of the payment terminal. The password is a 6-digits code,
     /// e.x. 123456.
-    #[clap(long)]
+    #[argh(option)]
     password: usize,
 
-    /// The config byte for the registration.
-    #[clap(long, default_value = "222")]
+    /// config byte for the registration.
+    #[argh(option, default = "222")]
     config_byte: u8,
 
-    /// Force the update. The update will otherwise be skipped if the returned
+    /// forces the update. The update will otherwise be skipped if the returned
     /// software version corresponds to the version stored in app1/update.spec.
-    #[clap(long, default_value = "false")]
+    #[argh(switch)]
     force: bool,
 
-    /// The folder containing the payload, e.x. firmware and app1 folders.
+    /// folder containing the payload, e.x. firmware and app1 folders.
+    #[argh(positional)]
     payload_dir: PathBuf,
 }
 
@@ -41,16 +42,16 @@ struct UpdateSpec {
 ///
 /// We're using the app1/update.spec as a proxy for the version of the entire
 /// firmware update. Returns an error if the desired version cannot be read.
-fn get_desired_version(payload_dir: &std::path::PathBuf) -> Result<String> {
+fn get_desired_version(payload_dir: &Path) -> Result<String> {
     let path = payload_dir.join("app1/update.spec");
-    let update_spec_str = read_to_string(&path)?;
+    let update_spec_str = read_to_string(path)?;
     let update_spec: UpdateSpec = serde_json::from_str(&update_spec_str)?;
     Ok(update_spec.version)
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let args = Args::parse();
+    let args: Args = argh::from_env();
 
     // Connect to the payment terminal.
     let source = TcpStream::connect(&args.ip_address).await?;
@@ -78,7 +79,10 @@ async fn main() -> Result<()> {
 
     {
         // Check the current version of the software
-        let request = feig::packets::CVendFunctions { instr: 1 };
+        let request = feig::packets::CVendFunctions {
+            password: None,
+            instr: 1,
+        };
         let mut stream = feig::sequences::GetSystemInfo::into_stream(&request, &mut socket);
         let mut current_version = "unknown".to_string();
         while let Some(response) = stream.next().await {
