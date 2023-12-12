@@ -15,7 +15,10 @@ uses in production in most of our charging stations.
 
 ## Getting started
 
-Start by looking in [`status`](zvt/src/bin/status/main.rs) for a typical way of
-interfacing with a terminal. A useful standalone tool is
-[`feig_update`](zvt/src/bin/feig_update/main.rs) which we use in production to
-update the Firmware of our cVEND plug terminals.
+The [zvt_cli][zvt_cli/src/main.rs] is both a useful swiss army knife to
+interacting with a payment terminal as well as the example on how you use the
+library. 
+
+A useful standalone tool is [`feig_update`](zvt/src/bin/feig_update/main.rs)
+which we use in production to update the Firmware of our cVEND plug terminals.
+This will eventually also be folded into `zvt_cli`.
