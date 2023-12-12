@@ -142,7 +142,8 @@ impl Encoding<NaiveDateTime> for Default {
 /// The default is when the [Tag] is used as a Bmp-number or as a Tlv-tag.
 impl encoding::Encoding<Tag> for Default {
     fn encode(input: &Tag) -> Vec<u8> {
-        if (input.0 >> 8) == 0x1f {
+        let low = input.0 >> 8;
+        if low == 0x1f || low == 0xff {
             input.0.to_be_bytes().to_vec()
         } else {
             vec![input.0 as u8]
@@ -151,7 +152,7 @@ impl encoding::Encoding<Tag> for Default {
 
     fn decode(bytes: &[u8]) -> ZVTResult<(Tag, &[u8])> {
         let (tag, new_bytes): (u8, _) = encoding::BigEndian::decode(bytes)?;
-        if tag == 0x1f {
+        if tag == 0x1f || tag == 0xff {
             if bytes.len() < 2 {
                 Err(ZVTError::IncompleteData)
             } else {

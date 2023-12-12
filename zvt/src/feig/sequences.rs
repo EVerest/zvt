@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use std::io::Seek;
 use std::io::{Error, ErrorKind};
 use std::marker::Unpin;
+use std::net::Ipv4Addr;
 use std::os::unix::fs::FileExt;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
@@ -212,4 +213,46 @@ pub enum FactoryResetResponse {
 impl Sequence for FactoryReset {
     type Input = super::packets::CVendFunctions;
     type Output = FactoryResetResponse;
+}
+
+pub struct ChangeHostConfiguration;
+
+#[derive(Debug, ZvtEnum)]
+pub enum ChangeHostConfigurationResponse {
+    CompletionData(packets::CompletionData),
+    Abort(packets::Abort),
+}
+
+impl ChangeHostConfiguration {
+    pub fn into_stream<Source>(
+        password: usize,
+        ip: Ipv4Addr,
+        port: u16,
+        config_byte: u8,
+        src: &mut PacketTransport<Source>,
+    ) -> Pin<Box<impl Stream<Item = Result<ChangeHostConfigurationResponse>> + '_>>
+    where
+        Source: AsyncReadExt + AsyncWriteExt + Unpin + Send,
+    {
+        let s = try_stream! {
+            let packet = super::packets::ChangeConfiguration {
+                tlv: super::packets::tlv::ChangeConfiguration {
+                    system_information: super::packets::tlv::SystemInformation {
+                        password,
+                        host_configuration_data: Some(super::packets::tlv::HostConfigurationData {
+                            ip: ip.into(),
+                            port,
+                            config_byte,
+                        }),
+                    },
+                },
+            };
+            src.write_packet_with_ack(&packet).await?;
+
+            let response = src.read_packet().await?;
+            src.write_packet(&packets::Ack {}).await?;
+            yield response;
+        };
+        Box::pin(s)
+    }
 }

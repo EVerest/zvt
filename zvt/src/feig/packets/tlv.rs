@@ -76,3 +76,30 @@ pub struct WriteFile {
     #[zvt_tlv(tag = 0x2d)]
     pub files: Vec<File>,
 }
+
+#[derive(Debug, PartialEq, Zvt, Default)]
+pub struct HostConfigurationData {
+    #[zvt_bmp(encoding = encoding::BigEndian)]
+    pub ip: u32,
+
+    #[zvt_bmp(encoding = encoding::BigEndian)]
+    pub port: u16,
+
+    #[zvt_bmp(encoding = encoding::BigEndian)]
+    pub config_byte: u8,
+}
+
+#[derive(Debug, PartialEq, Zvt, Default)]
+pub struct SystemInformation {
+    #[zvt_tlv(encoding = encoding::Bcd, tag = 0xff40)]
+    pub password: usize,
+
+    #[zvt_tlv(tag = 0xff41)]
+    pub host_configuration_data: Option<HostConfigurationData>,
+}
+
+#[derive(Debug, PartialEq, Zvt, Default)]
+pub struct ChangeConfiguration {
+    #[zvt_tlv(tag = 0xe4)]
+    pub system_information: SystemInformation,
+}
