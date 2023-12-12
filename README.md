@@ -15,7 +15,7 @@ uses in production in most of our charging stations.
 
 ## Getting started
 
-The [zvt_cli][zvt_cli/src/main.rs] is both a useful swiss army knife to
+The [zvt_cli](zvt_cli/src/main.rs) is both a useful swiss army knife to
 interacting with a payment terminal as well as the example on how you use the
 library. 
 
