@@ -501,13 +501,20 @@ async fn change_host_config(
     password: usize,
     args: ChangeHostConfigurationArgs,
 ) -> Result<()> {
-    let mut stream = feig::sequences::ChangeHostConfiguration::into_stream(
-        password,
-        args.ip,
-        args.port,
-        args.configuration_byte,
-        socket,
-    );
+    let request = feig::packets::ChangeConfiguration {
+        tlv: feig::packets::tlv::ChangeConfiguration {
+            system_information: feig::packets::tlv::SystemInformation {
+                password,
+                host_configuration_data: Some(feig::packets::tlv::HostConfigurationData {
+                    ip: args.ip.into(),
+                    port: args.port,
+                    config_byte: args.configuration_byte,
+                }),
+            },
+        },
+    };
+
+    let mut stream = feig::sequences::ChangeHostConfiguration::into_stream(&request, socket);
     use feig::sequences::ChangeHostConfigurationResponse::*;
     while let Some(response) = stream.next().await {
         match response? {
