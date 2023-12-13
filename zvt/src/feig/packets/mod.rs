@@ -61,6 +61,17 @@ pub struct WriteFile {
     pub tlv: Option<tlv::WriteFile>,
 }
 
+/// Configuration packages. They all use the "Change Configuration" flow, but
+/// with vastly different parameters, hence we have one for each flow. The Change Configuration
+/// is described in 2.40, but since this is very hardware manufacturer specific, we put this one
+/// here. So mostly see cVEND 6.7-6.16.
+#[derive(Debug, PartialEq, Zvt)]
+#[zvt_control_field(class = 0x08, instr = 0x13)]
+pub struct ChangeConfiguration {
+    #[zvt_bmp(number = 0x06, length = length::Tlv)]
+    pub tlv: tlv::ChangeConfiguration,
+}
+
 /// Feig, 5.1
 #[derive(Debug, PartialEq, Zvt)]
 #[zvt_control_field(class = 0x0f, instr = 0xa1)]
@@ -86,6 +97,7 @@ mod test {
     use super::*;
     use crate::packets::tests::get_bytes;
     use crate::ZvtSerializer;
+    use std::net::Ipv4Addr;
 
     #[test]
     fn test_request_for_data() {
@@ -229,5 +241,30 @@ mod test {
         // Serialize back to bytes and compare everything up to the payload.
         let actual_bytes = expected.zvt_serialize();
         assert_eq!(actual_bytes[..26], bytes[..26]);
+    }
+
+    #[test]
+    fn test_change_host_config() {
+        let bytes = get_bytes("change_host_config.blob");
+        let addr = Ipv4Addr::new(213, 183, 19, 105);
+        let addr_u32: u32 = addr.into();
+
+        let expected = ChangeConfiguration {
+            tlv: tlv::ChangeConfiguration {
+                system_information: tlv::SystemInformation {
+                    password: 123456,
+                    host_configuration_data: Some(tlv::HostConfigurationData {
+                        ip: addr_u32,
+                        port: 30401,
+                        config_byte: 1,
+                    }),
+                },
+            },
+        };
+        assert_eq!(
+            ChangeConfiguration::zvt_deserialize(&bytes).unwrap().0,
+            expected
+        );
+        assert_eq!(bytes, expected.zvt_serialize());
     }
 }

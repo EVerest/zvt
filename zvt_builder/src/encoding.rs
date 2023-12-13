@@ -142,7 +142,8 @@ impl Encoding<NaiveDateTime> for Default {
 /// The default is when the [Tag] is used as a Bmp-number or as a Tlv-tag.
 impl encoding::Encoding<Tag> for Default {
     fn encode(input: &Tag) -> Vec<u8> {
-        if (input.0 >> 8) == 0x1f {
+        let low = input.0 >> 8;
+        if low == 0x1f || low == 0xff {
             input.0.to_be_bytes().to_vec()
         } else {
             vec![input.0 as u8]
@@ -151,7 +152,11 @@ impl encoding::Encoding<Tag> for Default {
 
     fn decode(bytes: &[u8]) -> ZVTResult<(Tag, &[u8])> {
         let (tag, new_bytes): (u8, _) = encoding::BigEndian::decode(bytes)?;
-        if tag == 0x1f {
+        // §9.4.1 of the PA00P015 defines a lot of tags, there is a bunch of 2 byte tags that start
+        // with 0xf1xx, there is also 0xff01-0xff04 defined there.
+        // TODO(hrapp): The same section also mentions tags 0x9f5a, 0x9f5b, and three byte tags
+        // 0x1f8000 and 0x1f8001 which we are not handling correctly currently.
+        if tag == 0x1f || tag == 0xff {
             if bytes.len() < 2 {
                 Err(ZVTError::IncompleteData)
             } else {

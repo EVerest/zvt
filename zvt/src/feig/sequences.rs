@@ -213,3 +213,16 @@ impl Sequence for FactoryReset {
     type Input = super::packets::CVendFunctions;
     type Output = FactoryResetResponse;
 }
+
+pub struct ChangeHostConfiguration;
+
+#[derive(Debug, ZvtEnum)]
+pub enum ChangeHostConfigurationResponse {
+    CompletionData(packets::CompletionData),
+    Abort(packets::Abort),
+}
+
+impl Sequence for ChangeHostConfiguration {
+    type Input = super::packets::ChangeConfiguration;
+    type Output = ChangeHostConfigurationResponse;
+}

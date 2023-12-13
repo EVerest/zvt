@@ -2,6 +2,7 @@ use anyhow::{bail, Result};
 use argh::FromArgs;
 use env_logger::{Builder, Env};
 use std::io::Write;
+use std::net::Ipv4Addr;
 use tokio::net::TcpStream;
 use tokio_stream::StreamExt;
 use zvt::sequences::Sequence;
@@ -23,6 +24,7 @@ enum SubCommands {
     ReadCard(ReadCardArgs),
     Reservation(ReservationArgs),
     PartialReversal(PartialReversalArgs),
+    ChangeHostConfiguration(ChangeHostConfigurationArgs),
 }
 
 #[derive(FromArgs, PartialEq, Debug)]
@@ -179,6 +181,23 @@ struct PartialReversalArgs {
     /// see reservation.
     #[argh(option)]
     bmp_data: Option<String>,
+}
+
+#[derive(FromArgs, PartialEq, Debug)]
+/// Changes the Host the payment terminal connects to.
+#[argh(subcommand, name = "change_host_config")]
+struct ChangeHostConfigurationArgs {
+    /// the IP the terminal should connect to.
+    #[argh(option)]
+    ip: Ipv4Addr,
+
+    /// the port the terminal should connect to.
+    #[argh(option, default = "30401")]
+    port: u16,
+
+    /// see reservation.
+    #[argh(option, default = "1")]
+    configuration_byte: u8,
 }
 
 #[derive(FromArgs, Debug)]
@@ -477,6 +496,35 @@ async fn partial_reversal(socket: &mut PacketTransport, args: PartialReversalArg
     Ok(())
 }
 
+async fn change_host_config(
+    socket: &mut PacketTransport,
+    password: usize,
+    args: ChangeHostConfigurationArgs,
+) -> Result<()> {
+    let request = feig::packets::ChangeConfiguration {
+        tlv: feig::packets::tlv::ChangeConfiguration {
+            system_information: feig::packets::tlv::SystemInformation {
+                password,
+                host_configuration_data: Some(feig::packets::tlv::HostConfigurationData {
+                    ip: args.ip.into(),
+                    port: args.port,
+                    config_byte: args.configuration_byte,
+                }),
+            },
+        },
+    };
+
+    let mut stream = feig::sequences::ChangeHostConfiguration::into_stream(&request, socket);
+    use feig::sequences::ChangeHostConfigurationResponse::*;
+    while let Some(response) = stream.next().await {
+        match response? {
+            CompletionData(_) => (),
+            Abort(data) => bail!("Received Abort: {:?}", data),
+        }
+    }
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     init_logger();
@@ -499,6 +547,9 @@ async fn main() -> Result<()> {
         SubCommands::ReadCard(a) => read_card(&mut socket, &a).await?,
         SubCommands::Reservation(a) => reservation(&mut socket, a).await?,
         SubCommands::PartialReversal(a) => partial_reversal(&mut socket, a).await?,
+        SubCommands::ChangeHostConfiguration(a) => {
+            change_host_config(&mut socket, args.password, a).await?
+        }
     }
 
     Ok(())
