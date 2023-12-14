@@ -280,7 +280,7 @@ fn derive_deserialize(
                 match tag.0 {
                     #(#opt_field_quotes)*
                     _ => {
-                        log::debug!("Unhandled tag: 0x{:X}. We try to skip it, but expect trouble.", tag.0);
+                        log::error!("Unhandled tag: 0x{:X}. We give up parsing here, your data is only partially interpreted.", tag.0);
                         break;
                     }
                 }

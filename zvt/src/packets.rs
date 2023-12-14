@@ -614,7 +614,6 @@ pub mod tests {
 
     #[rstest::rstest]
     fn test_status_information_read_card() {
-        // After pre-auth.
         let bytes = get_bytes("status_information_read_card.blob");
         let expected = StatusInformation {
             result_code: Some(0),
