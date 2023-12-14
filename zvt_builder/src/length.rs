@@ -94,7 +94,7 @@ impl<const N: usize> Length for LlvImpl<N> {
         let mut k = input;
         let mut rv = vec![0; N];
         for i in (0..N).rev() {
-            rv[i] = (k % 10) as u8;
+            rv[i] = 0xf0 | (k % 10) as u8;
             k /= 10;
         }
         rv

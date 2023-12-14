@@ -274,11 +274,15 @@ fn derive_deserialize(
                     Err(_) => break,
                     Ok(data) => data.0,
                 };
+                log::debug!("Found tag: 0x{:X}", tag.0);
 
                 // Try to match our tags
                 match tag.0 {
                     #(#opt_field_quotes)*
-                    _ => {break;}
+                    _ => {
+                        log::debug!("Unhandled tag: 0x{:X}. We try to skip it, but expect trouble.", tag.0);
+                        break;
+                    }
                 }
 
             }

@@ -65,7 +65,10 @@ pub struct StatusInformation {
     #[zvt_bmp(number = 0x22, length = length::Llv, encoding = encoding::Bcd)]
     pub card_number: Option<usize>,
 
-    #[zvt_bmp(number = 0x27)]
+    #[zvt_bmp(number = 0x23, length = length::Llv, encoding= encoding::Hex)]
+    pub track_2_data: Option<String>,
+
+    #[zvt_bmp(number = 0x27, length = length::Fixed<1>)]
     pub result_code: Option<u8>,
 
     #[zvt_bmp(number = 0x29, length = length::Fixed<4>, encoding = encoding::Bcd)]
@@ -249,6 +252,9 @@ pub struct Reservation {
     #[zvt_bmp(number = 0x22, length = length::Llv, encoding = encoding::Bcd)]
     pub card_number: Option<usize>,
 
+    #[zvt_bmp(number = 0x23, length = length::Llv, encoding= encoding::Hex)]
+    pub track_2_data: Option<String>,
+
     // Unclear how to interpret this.
     #[zvt_bmp(number = 0x01)]
     pub timeout: Option<u8>,
@@ -425,6 +431,13 @@ pub mod tests {
     use chrono::NaiveDate;
     use std::fs;
 
+    #[rstest::fixture]
+    pub fn common_setup() {
+        env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("debug"))
+            .is_test(true)
+            .init();
+    }
+
     pub fn get_bytes(name: &str) -> Vec<u8> {
         let path_from_root = "zvt/data/".to_string();
         let base_dir = match fs::metadata(&path_from_root) {
@@ -434,7 +447,7 @@ pub mod tests {
         fs::read(&format!("{base_dir}/{name}")).unwrap()
     }
 
-    #[test]
+    #[rstest::rstest]
     fn test_read_card() {
         let bytes = get_bytes("1680722649.972316000_ecr_pt.blob");
         let expected = ReadCard {
@@ -452,7 +465,7 @@ pub mod tests {
         assert_eq!(expected, output.0);
     }
 
-    #[test]
+    #[rstest::rstest]
     fn test_status_information() {
         let bytes = get_bytes("1680728161.963129000_pt_ecr.blob");
         let expected = StatusInformation {
@@ -461,6 +474,9 @@ pub mod tests {
                 uuid: Some("000000000000081ca72f".to_string()),
                 ats: Some("0578807002".to_string()),
                 card_type: Some(1),
+                maximum_pre_autorisation: None,
+                card_identification_item: None,
+                subs_on_card: None,
                 sub_type: Some("fe04".to_string()),
                 atqa: Some("0400".to_string()),
                 sak: Some(0x20),
@@ -596,7 +612,45 @@ pub mod tests {
         assert!(expected.tlv.as_ref().unwrap().subs.is_empty());
     }
 
-    #[test]
+    #[rstest::rstest]
+    fn test_status_information_read_card() {
+        // After pre-auth.
+        let bytes = get_bytes("status_information_read_card.blob");
+        let expected = StatusInformation {
+            result_code: Some(0),
+            track_2_data: Some("6725904411001000142d24122012386013860f".to_string()),
+            tlv: Some(tlv::StatusInformation {
+                maximum_pre_autorisation: Some(10000),
+                card_identification_item: Some("3f56a32065cc4dbe8330c37609f91996".to_string()),
+                uuid: Some("00000000000008b3c880".to_string()),
+                ats: Some("0c788074038031c073d631c0".to_string()),
+                card_type: Some(1),
+                sub_type: Some("fe04".to_string()),
+                atqa: Some("0400".to_string()),
+                sak: Some(32),
+                subs: Vec::new(),
+                subs_on_card: Some(tlv::SubsOnCard {
+                    subs: vec![
+                        tlv::SubOnCard {
+                            application_id: Some("a0000003591010028001".to_string()),
+                            card_type: Some("0005".to_string()),
+                        },
+                        tlv::SubOnCard {
+                            application_id: Some("a0000000043060".to_string()),
+                            card_type: Some("002e".to_string()),
+                        },
+                    ],
+                }),
+            }),
+            ..StatusInformation::default()
+        };
+        assert_eq!(
+            expected,
+            StatusInformation::zvt_deserialize(&bytes).unwrap().0
+        );
+    }
+
+    #[rstest::rstest]
     fn test_receipt_printout_completion() {
         let bytes = get_bytes("1680728219.054216000_pt_ecr.blob");
         let expected = ReceiptPrintoutCompletion {
@@ -626,7 +680,7 @@ pub mod tests {
         );
     }
 
-    #[test]
+    #[rstest::rstest]
     fn test_pre_auth_data() {
         let bytes = get_bytes("1680728162.033575000_ecr_pt.blob");
         let expected = Reservation {
@@ -644,7 +698,7 @@ pub mod tests {
         assert_eq!(Reservation::zvt_deserialize(&bytes).unwrap().0, expected,);
     }
 
-    #[test]
+    #[rstest::rstest]
     fn test_registration() {
         let bytes = get_bytes("1681273860.511128000_ecr_pt.blob");
         let expected = Registration {
@@ -657,7 +711,7 @@ pub mod tests {
         assert_eq!(Registration::zvt_deserialize(&bytes).unwrap().0, expected);
     }
 
-    #[test]
+    #[rstest::rstest]
     fn test_pre_auth_reversal() {
         let bytes = get_bytes("1680728213.562478000_ecr_pt.blob");
         let expected = PreAuthReversal {
@@ -671,7 +725,7 @@ pub mod tests {
         );
     }
 
-    #[test]
+    #[rstest::rstest]
     fn test_completion_data() {
         let bytes = get_bytes("1680761818.641601000_pt_ecr.blob");
         let golden = CompletionData {
@@ -685,7 +739,7 @@ pub mod tests {
         assert_eq!(CompletionData::zvt_deserialize(&bytes).unwrap().0, golden);
     }
 
-    #[test]
+    #[rstest::rstest]
     fn test_end_of_day() {
         let bytes = get_bytes("1681282621.302434000_ecr_pt.blob");
         let expected = EndOfDay { password: 123456 };
@@ -694,7 +748,7 @@ pub mod tests {
         assert_eq!(bytes, expected.zvt_serialize());
     }
 
-    #[test]
+    #[rstest::rstest]
     fn test_partial_reversal() {
         let bytes = get_bytes("1681455683.221609000_ecr_pt.blob");
         let expected = PartialReversal {
@@ -715,7 +769,7 @@ pub mod tests {
         );
     }
 
-    #[test]
+    #[rstest::rstest]
     fn test_intermediate_status() {
         let bytes = get_bytes("1680728162.647465000_pt_ecr.blob");
         let expected = IntermediateStatusInformation {
@@ -731,7 +785,7 @@ pub mod tests {
         assert_eq!(bytes, expected.zvt_serialize());
     }
 
-    #[test]
+    #[rstest::rstest]
     fn test_print_text_block() {
         let bytes = get_bytes("1680728215.585561000_pt_ecr.blob");
         let actual = PrintTextBlock::zvt_deserialize(&bytes).unwrap().0;
@@ -743,7 +797,7 @@ pub mod tests {
         assert_eq!(bytes, actual.zvt_serialize());
     }
 
-    #[test]
+    #[rstest::rstest]
     fn test_text_block_system_information() {
         let bytes = get_bytes("print_system_configuration_reply.blob");
         let actual = PrintTextBlock::zvt_deserialize(&bytes).unwrap().0;
@@ -755,7 +809,7 @@ pub mod tests {
         assert_eq!(bytes, actual.zvt_serialize());
     }
 
-    #[test]
+    #[rstest::rstest]
     fn test_partial_reversal_abort() {
         let bytes = get_bytes("partial_reversal.blob");
         let actual = PartialReversalAbort::zvt_deserialize(&bytes).unwrap().0;

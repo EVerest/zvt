@@ -95,6 +95,7 @@ pub trait ZvtSerializerImpl<
             );
         }
         let (length, payload) = L::deserialize(bytes)?;
+        debug!("length: {length}, payload.len: {}", payload.len());
         if length > payload.len() {
             return Err(ZVTError::IncompleteData);
         }

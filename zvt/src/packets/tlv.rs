@@ -8,9 +8,30 @@ pub struct Subs {
 }
 
 #[derive(Debug, Default, PartialEq, Zvt)]
+pub struct SubOnCard {
+    #[zvt_tlv(tag = 0x41, encoding = encoding::Hex)]
+    pub card_type: Option<String>,
+
+    #[zvt_tlv(tag = 0x43, encoding = encoding::Hex)]
+    pub application_id: Option<String>,
+}
+
+#[derive(Debug, Default, PartialEq, Zvt)]
+pub struct SubsOnCard {
+    #[zvt_tlv(tag = 0x60)]
+    pub subs: Vec<SubOnCard>,
+}
+
+#[derive(Debug, Default, PartialEq, Zvt)]
 pub struct StatusInformation {
     #[zvt_tlv(tag = 0x4c, encoding = encoding::Hex)]
     pub uuid: Option<String>,
+
+    #[zvt_tlv(tag = 0x1f0b,  encoding = encoding::Bcd)]
+    pub maximum_pre_autorisation: Option<usize>,
+
+    #[zvt_tlv(tag = 0x1f14, encoding = encoding::Hex)]
+    pub card_identification_item: Option<String>,
 
     #[zvt_tlv(tag = 0x1f45, encoding = encoding::Hex)]
     pub ats: Option<String>,
@@ -31,6 +52,9 @@ pub struct StatusInformation {
     // this is a vector.
     #[zvt_tlv(tag = 0x60)]
     pub subs: Vec<Subs>,
+
+    #[zvt_tlv(tag = 0x62)]
+    pub subs_on_card: Option<SubsOnCard>,
 }
 
 #[derive(Debug, Default, PartialEq, Zvt)]
