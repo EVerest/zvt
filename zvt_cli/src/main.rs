@@ -143,8 +143,8 @@ struct ReservationArgs {
     #[argh(option, default = "64")]
     payment_type: u8,
 
-    #[argh(option)]
     /// track 2 data to identify past read card.
+    #[argh(option)]
     track_2_data: Option<String>,
 
     /// bmp_prefix. If this is set, bmp_data must be set too.

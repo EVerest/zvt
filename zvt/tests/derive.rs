@@ -194,7 +194,7 @@ fn test_nested() {
     #[derive(Zvt, PartialEq, Debug)]
     struct Outer {
         a: u16,
-        #[zvt_bmp(number = 0x12, length = length::Tlv)]
+        #[zvt_tlv(tag = 0x12)]
         b: Option<Inner>,
     }
 

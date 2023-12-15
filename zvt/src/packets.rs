@@ -482,6 +482,7 @@ pub mod tests {
                 sak: Some(0x20),
                 subs: vec![tlv::Subs {
                     application_id: Some("a0000000041010".to_string()),
+                    card_type: None,
                 }],
             }),
             ..StatusInformation::default()
@@ -630,11 +631,11 @@ pub mod tests {
                 subs: Vec::new(),
                 subs_on_card: Some(tlv::SubsOnCard {
                     subs: vec![
-                        tlv::SubOnCard {
+                        tlv::Subs {
                             application_id: Some("a0000003591010028001".to_string()),
                             card_type: Some("0005".to_string()),
                         },
-                        tlv::SubOnCard {
+                        tlv::Subs {
                             application_id: Some("a0000000043060".to_string()),
                             card_type: Some("002e".to_string()),
                         },

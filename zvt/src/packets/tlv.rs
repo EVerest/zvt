@@ -3,12 +3,6 @@ use chrono::NaiveDateTime;
 
 #[derive(Debug, Default, PartialEq, Zvt)]
 pub struct Subs {
-    #[zvt_bmp(number = 0x43, length = length::Tlv, encoding = encoding::Hex)]
-    pub application_id: Option<String>,
-}
-
-#[derive(Debug, Default, PartialEq, Zvt)]
-pub struct SubOnCard {
     #[zvt_tlv(tag = 0x41, encoding = encoding::Hex)]
     pub card_type: Option<String>,
 
@@ -19,7 +13,7 @@ pub struct SubOnCard {
 #[derive(Debug, Default, PartialEq, Zvt)]
 pub struct SubsOnCard {
     #[zvt_tlv(tag = 0x60)]
-    pub subs: Vec<SubOnCard>,
+    pub subs: Vec<Subs>,
 }
 
 #[derive(Debug, Default, PartialEq, Zvt)]
@@ -65,16 +59,16 @@ pub struct StatusEnquiry {
 
 #[derive(Debug, PartialEq, Zvt)]
 pub struct DeviceInformation {
-    #[zvt_bmp(number = 0x1f40, length = length::Tlv)]
+    #[zvt_tlv(tag = 0x1f40)]
     pub device_name: Option<String>,
 
-    #[zvt_bmp(number = 0x1f41, length = length::Tlv)]
+    #[zvt_tlv(tag = 0x1f41)]
     pub software_version: Option<String>,
 
-    #[zvt_bmp(number = 0x1f42, length = length::Tlv, encoding = encoding::Bcd)]
+    #[zvt_tlv(tag = 0x1f42, encoding = encoding::Bcd)]
     pub serial_number: Option<usize>,
 
-    #[zvt_bmp(number = 0x1f43, length = length::Tlv)]
+    #[zvt_tlv(tag = 0x1f43)]
     pub device_state: Option<u8>,
 }
 
@@ -133,7 +127,7 @@ pub struct ReadCard {
 
 #[derive(Debug, PartialEq, Zvt)]
 pub struct ZvtString {
-    #[zvt_bmp(number = 0x07, length=length::Tlv)]
+    #[zvt_tlv(tag = 0x07)]
     pub line: String,
 }
 
