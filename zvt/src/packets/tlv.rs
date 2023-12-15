@@ -1,4 +1,4 @@
-use crate::{encoding, length, Zvt};
+use crate::{encoding, Zvt};
 use chrono::NaiveDateTime;
 
 #[derive(Debug, Default, PartialEq, Zvt)]
