@@ -1,4 +1,7 @@
+use num_derive::FromPrimitive;
+
 /// Messages as defined under chapter 10.
+#[derive(Debug, PartialEq, FromPrimitive)]
 #[repr(u8)]
 pub enum ErrorMessages {
     CardNotReadable = 0x64,
