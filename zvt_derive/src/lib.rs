@@ -274,11 +274,18 @@ fn derive_deserialize(
                     Err(_) => break,
                     Ok(data) => data.0,
                 };
+                log::debug!("Found tag: 0x{:X}", tag.0);
 
                 // Try to match our tags
                 match tag.0 {
                     #(#opt_field_quotes)*
-                    _ => {break;}
+                    _ => {
+                        // TODO(hrapp): This should return Error::WrongTag, however since this is
+                        // highly backwards incompatible and we see this warning quite a bit in
+                        // (uncritical) packages in prod, we did not do this yet.
+                        log::error!("Unhandled tag: 0x{:X}. We give up parsing here, your data is only partially interpreted.", tag.0);
+                        break;
+                    }
                 }
 
             }

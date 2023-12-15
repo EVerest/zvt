@@ -99,7 +99,12 @@ mod test {
     use crate::ZvtSerializer;
     use std::net::Ipv4Addr;
 
-    #[test]
+    #[rstest::fixture]
+    fn common_setup() {
+        crate::packets::tests::common_setup();
+    }
+
+    #[rstest::rstest]
     fn test_request_for_data() {
         let bytes = get_bytes("1682080275.777628000_192.168.0.59_192.168.0.139.blob");
         let expected = RequestForData {
@@ -116,7 +121,7 @@ mod test {
         assert_eq!(bytes, expected.zvt_serialize());
     }
 
-    #[test]
+    #[rstest::rstest]
     fn test_cv_end_functions_enhanced_systems_information_completion() {
         let bytes = get_bytes("1680761818.768770000_pt_ecr.blob");
         let expected = CVendFunctionsEnhancedSystemInformationCompletion {
@@ -150,7 +155,7 @@ mod test {
         );
     }
 
-    #[test]
+    #[rstest::rstest]
     fn test_write_file() {
         let bytes = get_bytes("1682080275.594788000_192.168.0.139_192.168.0.59.blob");
         let expected = WriteFile {
@@ -206,7 +211,7 @@ mod test {
         assert_eq!(bytes, expected.zvt_serialize());
     }
 
-    #[test]
+    #[rstest::rstest]
     fn test_cvend_functions() {
         let bytes = get_bytes("1680761818.690979000_ecr_pt.blob");
         let expected = CVendFunctions {
@@ -217,7 +222,7 @@ mod test {
         assert_eq!(bytes, expected.zvt_serialize());
     }
 
-    #[test]
+    #[rstest::rstest]
     fn test_write_data() {
         let bytes = get_bytes("1682080310.907262000_192.168.0.139_192.168.0.59.blob");
         let dummy_data = vec![0; 0x042c];
@@ -243,7 +248,7 @@ mod test {
         assert_eq!(actual_bytes[..26], bytes[..26]);
     }
 
-    #[test]
+    #[rstest::rstest]
     fn test_change_host_config() {
         let bytes = get_bytes("change_host_config.blob");
         let addr = Ipv4Addr::new(213, 183, 19, 105);

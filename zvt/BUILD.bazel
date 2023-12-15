@@ -17,4 +17,6 @@ rust_test(
     crate = ":zvt",
     data = glob(["data/*.blob"]),
     edition = "2021",
+    proc_macro_deps = all_crate_deps(proc_macro = True),
+    deps = all_crate_deps(normal_dev = True),
 )

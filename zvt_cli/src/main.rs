@@ -143,6 +143,10 @@ struct ReservationArgs {
     #[argh(option, default = "64")]
     payment_type: u8,
 
+    /// track 2 data to identify past read card.
+    #[argh(option)]
+    track_2_data: Option<String>,
+
     /// bmp_prefix. If this is set, bmp_data must be set too.
     #[argh(option)]
     bmp_prefix: Option<String>,
@@ -447,12 +451,14 @@ fn prep_bmp_data(
         _ => bail!("Either none or both of bmp_data and bmp_prefix must be given."),
     }
 }
+
 async fn reservation(socket: &mut PacketTransport, args: ReservationArgs) -> Result<()> {
     let tlv = prep_bmp_data(args.bmp_prefix, args.bmp_data)?;
     let request = packets::Reservation {
         currency: Some(args.currency_code),
         amount: Some(args.amount),
         payment_type: Some(args.payment_type),
+        track_2_data: args.track_2_data,
         tlv,
         ..packets::Reservation::default()
     };
