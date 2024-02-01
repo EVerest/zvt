@@ -370,6 +370,7 @@ mod test {
                 currency: 0,
                 pre_authorization_amount: 0,
                 read_card_timeout: 15,
+                password: 123456,
             },
             ..Config::default()
         }
