@@ -867,33 +867,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dd8b5dd2ae5ed71462c540258bedcb51965123ad7e7ccf4b9a8cafaa4a63576d"
 
 [[package]]
-name = "payment_terminal"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-stream",
- "async-trait",
- "env_logger",
- "futures",
- "log",
- "mockall",
- "mockall_double",
- "num-traits",
- "pin-project",
- "serde",
- "serde_json",
- "thiserror",
- "time",
- "time-macros",
- "tokio",
- "tokio-stream",
- "tonic",
- "trust-dns-client",
- "trust-dns-proto",
- "zvt",
-]
-
-[[package]]
 name = "percent-encoding"
 version = "2.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1888,4 +1861,31 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.48",
+]
+
+[[package]]
+name = "zvt_feig_terminal"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-stream",
+ "async-trait",
+ "env_logger",
+ "futures",
+ "log",
+ "mockall",
+ "mockall_double",
+ "num-traits",
+ "pin-project",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "time",
+ "time-macros",
+ "tokio",
+ "tokio-stream",
+ "tonic",
+ "trust-dns-client",
+ "trust-dns-proto",
+ "zvt",
 ]
