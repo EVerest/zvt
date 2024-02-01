@@ -9,3 +9,9 @@ rust_library(
     edition = "2021",
     visibility = ["//visibility:public"],
 )
+
+rust_test(
+    name = "zvt_feig_terminal_test",
+    deps = all_crate_deps(normal_dev = True),
+    crate = ":zvt_feig_terminal",
+)
