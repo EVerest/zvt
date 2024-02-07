@@ -24,6 +24,7 @@ crates_repository(
         "//zvt_builder:Cargo.toml",
         "//zvt_cli:Cargo.toml",
         "//zvt_derive:Cargo.toml",
+        "//zvt_feig_terminal:Cargo.toml",
     ],
 )
 
