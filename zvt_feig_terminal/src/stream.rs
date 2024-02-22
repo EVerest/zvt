@@ -81,11 +81,13 @@ mod outer {
             debug!("Received {packet:?}");
             match packet? {
                     feig::sequences::GetSystemInfoResponse::CVendFunctionsEnhancedSystemInformationCompletion(packet) => {
-                        if packet.device_id.to_lowercase() == config.feig_serial.to_lowercase() {
+                        let expected_serial: String = config.feig_serial.to_lowercase();
+                        let actual_serial: String = packet.device_id.to_lowercase();
+                        if actual_serial == expected_serial {
                             drop(stream);
                             return Ok(socket);
                         }
-                        bail!(Error::new(ErrorKind::NotConnected, "Wrong device"))
+                        bail!(Error::new(ErrorKind::NotConnected, format!("Wrong device. Expected {}, got {}", expected_serial, actual_serial)))
                     },
                     feig::sequences::GetSystemInfoResponse::Abort(packet) => bail!(zvt::ZVTError::Aborted(packet.error))
                 }
