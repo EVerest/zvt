@@ -74,6 +74,7 @@ fn iso_4217(code: &str) -> Result<usize> {
         "SEK" => Ok(752),
         "GBP" => Ok(826),
         "EUR" => Ok(978),
+        "PLN" => Ok(985),
         _ => bail!("Unknown currency code {code}"),
     }
 }
