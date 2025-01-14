@@ -137,6 +137,9 @@ impl Feig {
     ///
     /// Function does nothing if the feig-terminal has already the desired
     /// terminal-id.
+    ///
+    /// Returns true if a new TID was set, and false if the requested TID is
+    /// already set to the terminal
     async fn set_terminal_id(&mut self) -> Result<bool> {
         let system_info = self.get_system_info().await?;
         let config = self.socket.config();
@@ -179,7 +182,6 @@ impl Feig {
             }),
         };
 
-        info!("Running an EMV configuration diagnosis");
         let mut stream = sequences::Diagnosis::into_stream(request, &mut self.socket);
         while let Some(response) = stream.next().await {
             use sequences::DiagnosisResponse::*;
