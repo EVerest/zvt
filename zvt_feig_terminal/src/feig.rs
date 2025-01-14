@@ -172,6 +172,28 @@ impl Feig {
         bail!(zvt::ZVTError::IncompleteData)
     }
 
+    async fn run_diagnosis(&mut self, diagnosis: packets::DiagnosisType) -> Result<()> {
+        let request = packets::Diagnosis {
+            tlv: Some(packets::tlv::Diagnosis {
+                diagnosis_type: Some(diagnosis as u8),
+            }),
+        };
+
+        info!("Running an EMV configuration diagnosis");
+        let mut stream = sequences::Diagnosis::into_stream(request, &mut self.socket);
+        while let Some(response) = stream.next().await {
+            use sequences::DiagnosisResponse::*;
+            match response? {
+                SetTimeAndDate(data) => log::debug!("{data:#?}"),
+                PrintLine(data) => log::debug!("{}", data.text),
+                PrintTextBlock(data) => log::debug!("{data:#?}"),
+                IntermediateStatusInformation(_) | CompletionData(_) => (),
+                Abort(_) => bail!("Received Abort."),
+            }
+        }
+        Ok(())
+    }
+
     /// Initializes the feig-terminal.
     async fn initialize(&mut self) -> Result<()> {
         let password = self.socket.config().feig_config.password;
@@ -286,6 +308,7 @@ impl Feig {
     /// * Run end-of-day job.
     pub async fn configure(&mut self) -> Result<()> {
         self.set_terminal_id().await?;
+        self.run_diagnosis(packets::DiagnosisType::EmvConfiguration).await?;
         self.initialize().await?;
         self.end_of_day().await?;
 
