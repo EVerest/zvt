@@ -137,14 +137,17 @@ impl Feig {
     ///
     /// Function does nothing if the feig-terminal has already the desired
     /// terminal-id.
-    async fn set_terminal_id(&mut self) -> Result<()> {
+    ///
+    /// Returns true if a new TID was set, and false if the requested TID is
+    /// already set to the terminal
+    async fn set_terminal_id(&mut self) -> Result<bool> {
         let system_info = self.get_system_info().await?;
         let config = self.socket.config();
 
         // Set the terminal id if required.
         if config.terminal_id == system_info.terminal_id {
             info!("Terminal id already up-to-date");
-            return Ok(());
+            return Ok(false);
         }
 
         // Sadly the terminal_id is a int, but we communicate it as a string...
@@ -162,7 +165,7 @@ impl Feig {
                 continue;
             };
             match response {
-                sequences::SetTerminalIdResponse::CompletionData(_) => return Ok(()),
+                sequences::SetTerminalIdResponse::CompletionData(_) => return Ok(true),
                 sequences::SetTerminalIdResponse::Abort(data) => {
                     bail!(zvt::ZVTError::Aborted(data.error))
                 }
@@ -170,6 +173,27 @@ impl Feig {
         }
 
         bail!(zvt::ZVTError::IncompleteData)
+    }
+
+    async fn run_diagnosis(&mut self, diagnosis: packets::DiagnosisType) -> Result<()> {
+        let request = packets::Diagnosis {
+            tlv: Some(packets::tlv::Diagnosis {
+                diagnosis_type: Some(diagnosis as u8),
+            }),
+        };
+
+        let mut stream = sequences::Diagnosis::into_stream(request, &mut self.socket);
+        while let Some(response) = stream.next().await {
+            use sequences::DiagnosisResponse::*;
+            match response? {
+                SetTimeAndDate(data) => log::debug!("{data:#?}"),
+                PrintLine(data) => log::debug!("{}", data.text),
+                PrintTextBlock(data) => log::debug!("{data:#?}"),
+                IntermediateStatusInformation(_) | CompletionData(_) => (),
+                Abort(_) => bail!("Received Abort."),
+            }
+        }
+        Ok(())
     }
 
     /// Initializes the feig-terminal.
@@ -285,7 +309,10 @@ impl Feig {
     /// * Initialize the terminal.
     /// * Run end-of-day job.
     pub async fn configure(&mut self) -> Result<()> {
-        self.set_terminal_id().await?;
+        let tid_changed = self.set_terminal_id().await?;
+        if tid_changed {
+            self.run_diagnosis(packets::DiagnosisType::EmvConfiguration).await?;
+        }
         self.initialize().await?;
         self.end_of_day().await?;
 
