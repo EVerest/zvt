@@ -222,9 +222,9 @@ impl Feig {
 
     /// Returns the pending transaction.
     ///
-    /// We return a vector of possible pending transactions. Right now we just
+    /// We return the first possible pending transactions. Right now we just
     /// check for one.
-    async fn get_pending(&mut self) -> Result<Vec<usize>> {
+    async fn get_pending(&mut self) -> Result<Option<usize>> {
         let request = packets::PartialReversal {
             receipt_no: Some(0xFFFF),
             ..packets::PartialReversal::default()
@@ -239,13 +239,13 @@ impl Feig {
                 sequences::PartialReversalResponse::PartialReversalAbort(data) => {
                     // The 0xFFFF means no pending transactions.
                     let Some(receipt_no) = data.receipt_no else {
-                        return Ok(vec![]);
+                        return Ok(None);
                     };
 
                     if receipt_no == 0xFFFF {
-                        return Ok(vec![]);
+                        return Ok(None);
                     }
-                    return Ok(vec![receipt_no]);
+                    return Ok(Some(receipt_no));
                 }
                 _ => bail!(Error::UnexpectedPacket),
             }
@@ -257,9 +257,9 @@ impl Feig {
     /// Cancels all pending transactions.
     async fn cancel_pending(&mut self) -> Result<()> {
         self.transactions.clear();
-        let pending = self.get_pending().await?;
-        for p in pending {
-            self.cancel_transaction_by_receipt_no(p).await?
+
+        while let Some(receipt_no) = self.get_pending().await? {
+            self.cancel_transaction_by_receipt_no(receipt_no).await?;
         }
         Ok(())
     }
@@ -311,7 +311,8 @@ impl Feig {
     pub async fn configure(&mut self) -> Result<()> {
         let tid_changed = self.set_terminal_id().await?;
         if tid_changed {
-            self.run_diagnosis(packets::DiagnosisType::EmvConfiguration).await?;
+            self.run_diagnosis(packets::DiagnosisType::EmvConfiguration)
+                .await?;
         }
         self.initialize().await?;
         self.end_of_day().await?;
