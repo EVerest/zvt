@@ -362,7 +362,10 @@ impl Feig {
                             // error.
                             bail!(Error::NoCardPresented)
                         }
-                        other => bail!("Unhandled error: {other}"),
+                        other => {
+                            log::info!("Unhandled error: {other}");
+                            bail!(other)
+                        }
                     }
                 }
                 sequences::ReadCardResponse::StatusInformation(data) => {
