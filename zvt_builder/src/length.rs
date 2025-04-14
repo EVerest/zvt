@@ -61,8 +61,7 @@ impl Length for Tlv {
     }
 
     fn deserialize(data: &[u8]) -> ZVTResult<(usize, &[u8])> {
-        let Some(d) = data.first()
-        else {
+        let Some(d) = data.first() else {
             return Err(ZVTError::IncompleteData);
         };
 
@@ -103,8 +102,7 @@ impl<const N: usize> Length for LlvImpl<N> {
     fn deserialize(data: &[u8]) -> ZVTResult<(usize, &[u8])> {
         let mut rv = 0;
         for i in 0..N {
-            let Some(d) = data.get(i)
-            else {
+            let Some(d) = data.get(i) else {
                 return Err(ZVTError::IncompleteData);
             };
             let d = (d & 0xf) as usize;
@@ -130,8 +128,7 @@ impl Length for Adpu {
     }
 
     fn deserialize(data: &[u8]) -> ZVTResult<(usize, &[u8])> {
-        let Some(d) = data.first()
-        else {
+        let Some(d) = data.first() else {
             return Err(ZVTError::IncompleteData);
         };
 

@@ -141,11 +141,8 @@ async fn main() -> Result<()> {
                 Err(_) => panic!("Failed to update the terminal"),
                 Ok(inner) => {
                     println!("Updating the terminal {:?}", inner);
-                    match inner {
-                        feig::sequences::WriteFileResponse::Abort(abort) => {
-                            panic!("Failed to update the terminal {abort:?}")
-                        }
-                        _ => {}
+                    if let feig::sequences::WriteFileResponse::Abort(abort) = inner {
+                        panic!("Failed to update the terminal {abort:?}")
                     }
                 }
             }

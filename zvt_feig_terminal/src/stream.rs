@@ -153,7 +153,7 @@ where
             .throttle(std::time::Duration::from_secs(2))
             .take(20);
 
-        return Self::into_stream_with_retry(input, src, repeater, TIMEOUT);
+        Self::into_stream_with_retry(input, src, repeater, TIMEOUT)
     }
 
     fn into_stream_with_retry<'a, RetryStream>(
