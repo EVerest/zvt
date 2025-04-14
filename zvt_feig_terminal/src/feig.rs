@@ -380,7 +380,7 @@ impl Feig {
                             None => false,
                             Some(application_id) => APPLICATION_ID_BLACKLIST_PREFIX
                                 .iter()
-                                .any(|&prefix| application_id.starts_with(prefix)),
+                                .all(|&prefix| !application_id.starts_with(prefix)),
                         });
 
                     if let Some(application_id) = application_id {
