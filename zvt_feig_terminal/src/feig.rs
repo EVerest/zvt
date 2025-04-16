@@ -1,5 +1,5 @@
-use crate::blacklist::APPLICATION_ID_BLACKLIST_PREFIX;
 use crate::config::Config;
+use crate::denylist::APPLICATION_ID_DENYLIST_PREFIX;
 use crate::stream::{ResetSequence, TcpStream};
 use anyhow::{anyhow, bail, Result};
 use log::{info, warn};
@@ -373,15 +373,12 @@ impl Feig {
                     // Retrieve the card information.
                     let tlv = data.tlv.ok_or(zvt::ZVTError::IncompleteData)?;
                     // Remove the black-listed application_ids.
-                    let application_id = tlv
-                        .subs
-                        .iter()
-                        .find(|sub| match &sub.application_id {
-                            None => false,
-                            Some(application_id) => APPLICATION_ID_BLACKLIST_PREFIX
-                                .iter()
-                                .all(|&prefix| !application_id.starts_with(prefix)),
-                        });
+                    let application_id = tlv.subs.iter().find(|sub| match &sub.application_id {
+                        None => false,
+                        Some(application_id) => APPLICATION_ID_DENYLIST_PREFIX
+                            .iter()
+                            .all(|&prefix| !application_id.starts_with(prefix)),
+                    });
 
                     if let Some(application_id) = application_id {
                         log::info!("Found the application_id {application_id:?}");
