@@ -1,4 +1,5 @@
 use crate::config::Config;
+use crate::denylist::APPLICATION_ID_DENYLIST_PREFIX;
 use crate::stream::{ResetSequence, TcpStream};
 use anyhow::{anyhow, bail, Result};
 use log::{info, warn};
@@ -371,13 +372,17 @@ impl Feig {
                 sequences::ReadCardResponse::StatusInformation(data) => {
                     // Retrieve the card information.
                     let tlv = data.tlv.ok_or(zvt::ZVTError::IncompleteData)?;
-                    if !tlv.subs.is_empty() {
-                        let subs = &tlv.subs[0];
-                        if subs.application_id.is_some() {
-                            card_info = Some(CardInfo::Bank);
-                        } else {
-                            bail!("Unknown card type")
-                        }
+                    // Remove the black-listed application_ids.
+                    let application_id = tlv.subs.iter().find(|sub| match &sub.application_id {
+                        None => false,
+                        Some(application_id) => APPLICATION_ID_DENYLIST_PREFIX
+                            .iter()
+                            .all(|&prefix| !application_id.starts_with(prefix)),
+                    });
+
+                    if let Some(application_id) = application_id {
+                        log::info!("Found the application_id {application_id:?}");
+                        card_info = Some(CardInfo::Bank);
                     } else if let Some(mut uuid) = tlv.uuid {
                         uuid = uuid.to_uppercase();
                         if uuid.len() > 14 {

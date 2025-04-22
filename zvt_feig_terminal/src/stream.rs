@@ -143,7 +143,7 @@ where
     fn into_stream<'a>(
         input: Self::Input,
         src: &'a mut TcpStream,
-    ) -> BoxStream<Result<Self::Output>>
+    ) -> BoxStream<'a, Result<Self::Output>>
     where
         Self: 'a,
         Self::Input: std::fmt::Debug,
@@ -153,7 +153,7 @@ where
             .throttle(std::time::Duration::from_secs(2))
             .take(20);
 
-        return Self::into_stream_with_retry(input, src, repeater, TIMEOUT);
+        Self::into_stream_with_retry(input, src, repeater, TIMEOUT)
     }
 
     fn into_stream_with_retry<'a, RetryStream>(
@@ -161,7 +161,7 @@ where
         src: &'a mut TcpStream,
         retry: RetryStream,
         timeout: std::time::Duration,
-    ) -> BoxStream<Result<Self::Output>>
+    ) -> BoxStream<'a, Result<Self::Output>>
     where
         Self: 'a,
         Self::Input: std::fmt::Debug,

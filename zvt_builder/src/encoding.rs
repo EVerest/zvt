@@ -66,7 +66,7 @@ encode_integral!(usize, Default, to_le_bytes, from_le_bytes);
 impl Encoding<String> for Default {
     fn encode(input: &String) -> Vec<u8> {
         let res = CP437.encode(input).unwrap();
-        res.try_into().unwrap()
+        res.into()
     }
 
     fn decode(data: &[u8]) -> ZVTResult<(String, &[u8])> {
