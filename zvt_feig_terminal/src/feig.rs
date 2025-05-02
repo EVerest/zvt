@@ -1,7 +1,7 @@
 use crate::config::Config;
 use crate::denylist::APPLICATION_ID_DENYLIST_PREFIX;
 use crate::stream::{ResetSequence, TcpStream};
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, ensure, Result};
 use log::{info, warn};
 use num_traits::FromPrimitive;
 use std::collections::HashMap;
@@ -143,7 +143,7 @@ impl Feig {
     /// already set to the terminal
     async fn set_terminal_id(&mut self) -> Result<bool> {
         let system_info = self.get_system_info().await?;
-        let config = self.socket.config();
+        let config = self.socket.config().clone();
 
         // Set the terminal id if required.
         if config.terminal_id == system_info.terminal_id {
@@ -166,7 +166,12 @@ impl Feig {
                 continue;
             };
             match response {
-                sequences::SetTerminalIdResponse::CompletionData(_) => return Ok(true),
+                sequences::SetTerminalIdResponse::CompletionData(_) => {
+                    drop(stream);
+                    let system_info = self.get_system_info().await?;
+                    ensure!(system_info.terminal_id == config.terminal_id);
+                    return Ok(true);
+                }
                 sequences::SetTerminalIdResponse::Abort(data) => {
                     bail!(zvt::ZVTError::Aborted(data.error))
                 }
