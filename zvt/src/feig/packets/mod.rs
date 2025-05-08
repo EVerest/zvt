@@ -33,6 +33,26 @@ impl length::Length for Temperature {
     }
 }
 
+/// We need also a custom handling for the battery voltage. Older versions
+/// don't have this field and we must ignore it if the overall length of the
+/// message is shorter than 4.
+struct BatteryVoltage {}
+
+impl length::Length for BatteryVoltage {
+    fn deserialize(bytes: &[u8]) -> ZVTResult<(usize, &[u8])> {
+        println!("Received bytes of {bytes:?}");
+        if bytes.len() <= 4 {
+            return Ok((0, bytes));
+        } else {
+            return Ok((4, bytes));
+        }
+    }
+
+    fn serialize(_len: usize) -> Vec<u8> {
+        vec![]
+    }
+}
+
 /// From Feig manual, 6.3 Enhanced system information.
 #[derive(Debug, PartialEq, Zvt)]
 #[zvt_control_field(class = 0x06, instr = 0x0f)]
@@ -45,6 +65,9 @@ pub struct CVendFunctionsEnhancedSystemInformationCompletion {
 
     #[zvt_bmp(length  = length::Fixed<8>)]
     pub terminal_id: String,
+
+    #[zvt_bmp(length  = BatteryVoltage)]
+    pub battery_voltage: String,
 
     #[zvt_bmp(length = Temperature)]
     pub temperature: String,
@@ -128,6 +151,7 @@ mod test {
             device_id: "17FD1E3C".to_string(),
             sw_version: "GER-APP-v2.0.9   ".to_string(),
             terminal_id: "52523535".to_string(),
+            battery_voltage: String::default(),
             temperature: "24.4".to_string(),
         };
         assert_eq!(
@@ -139,11 +163,29 @@ mod test {
         assert_eq!(bytes, expected.zvt_serialize());
 
         // Test the temperature encoding bug.
-        let bytes = b"\x06\x0f$17FE5C90GER-APP-v2.0.9   525251118.0";
+        let bytes = b"\x06\x0f\x2417FE5C90GER-APP-v2.0.9   525251118.0";
         let expected = CVendFunctionsEnhancedSystemInformationCompletion {
             device_id: "17FE5C90".to_string(),
             sw_version: "GER-APP-v2.0.9   ".to_string(),
             terminal_id: "52525111".to_string(),
+            battery_voltage: String::default(),
+            temperature: "8.0".to_string(),
+        };
+
+        assert_eq!(
+            CVendFunctionsEnhancedSystemInformationCompletion::zvt_deserialize(bytes)
+                .unwrap()
+                .0,
+            expected
+        );
+
+        // Test the battery voltage.
+        let bytes = b"\x06\x0f\x2817FE5C90GER-APP-v2.0.9   52525111ABCD8.0";
+        let expected = CVendFunctionsEnhancedSystemInformationCompletion {
+            device_id: "17FE5C90".to_string(),
+            sw_version: "GER-APP-v2.0.9   ".to_string(),
+            terminal_id: "52525111".to_string(),
+            battery_voltage: "ABCD".to_string(),
             temperature: "8.0".to_string(),
         };
 
