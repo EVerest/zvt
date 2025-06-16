@@ -27,6 +27,11 @@ pub struct FeigConfig {
     /// The password to the payment terminal.
     #[serde(default)]
     pub password: usize,
+
+    /// The maximum time (in sec) between end of day jobs. Payment backends might
+    /// force the payment terminals to run them regularly.
+    #[serde(default = "end_of_day_max_interval")]
+    pub end_of_day_max_interval: u64,
 }
 
 /// Deserializer which consumes a string code and returns the numerical code.
@@ -53,6 +58,11 @@ const fn pre_authorization_amount() -> usize {
     2500
 }
 
+/// The default duration between end of day jobs.
+const fn end_of_day_max_interval() -> u64 {
+    24 * 60 * 60
+}
+
 impl Default for FeigConfig {
     fn default() -> Self {
         Self {
@@ -60,6 +70,7 @@ impl Default for FeigConfig {
             pre_authorization_amount: pre_authorization_amount(),
             read_card_timeout: read_card_timeout(),
             password: 0,
+            end_of_day_max_interval: end_of_day_max_interval(),
         }
     }
 }
@@ -122,11 +133,12 @@ mod tests {
         assert_eq!(with_currency.pre_authorization_amount, 2500);
 
         let with_all = serde_json::from_str::<FeigConfig>(
-            "{\"currency\": \"GBP\", \"pre_authorization_amount\": 10}",
+            "{\"currency\": \"GBP\", \"pre_authorization_amount\": 10, \"end_of_day_max_interval\": 1234}",
         )
         .unwrap();
         assert_eq!(with_all.currency, 826);
         assert_eq!(with_all.pre_authorization_amount, 10);
+        assert_eq!(with_all.end_of_day_max_interval, 1234);
 
         // Invalid inputs.
         assert!(serde_json::from_str::<FeigConfig>("{\"currency\": \"ABC\"}").is_err());

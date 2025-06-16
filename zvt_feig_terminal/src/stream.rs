@@ -373,6 +373,7 @@ mod test {
                 pre_authorization_amount: 0,
                 read_card_timeout: 15,
                 password: 123456,
+                end_of_day_max_interval: 1000,
             },
             ..Config::default()
         }
