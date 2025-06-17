@@ -86,7 +86,6 @@ const PAYMENT_TYPE: Option<u8> = Some(0x40);
 /// number to the host. It allows us to tack payments at Lavego.
 const BMP_PREFIX: &str = "AC";
 
-#[derive(Default)]
 pub struct Feig {
     socket: TcpStream,
     /// Map of active transactions to their receipt-number.
@@ -94,15 +93,26 @@ pub struct Feig {
 
     /// Maximum number of concurrent transactions.
     transactions_max_num: usize,
+
+    /// The maximum interval between end of day jobs. This requires you to
+    /// query the `read_card` constantly.
+    end_of_day_max_interval: std::time::Duration,
+
+    /// The last end of day job.
+    end_of_day_last_instant: std::time::Instant,
 }
 
 impl Feig {
     pub async fn new(config: Config) -> Result<Self> {
         let transactions_max_num = config.transactions_max_num;
+        let end_of_day_max_interval =
+            std::time::Duration::from_secs(config.feig_config.end_of_day_max_interval);
         let mut this = Self {
             socket: TcpStream::new(config)?,
             transactions: HashMap::new(),
             transactions_max_num,
+            end_of_day_max_interval,
+            end_of_day_last_instant: std::time::Instant::now(),
         };
 
         // Ignore the errors from configure (call fails if e.x. the terminal id is
@@ -276,6 +286,10 @@ impl Feig {
     /// end of day job. Caution: Calling this will wipe all ongoing
     /// transactions.
     async fn end_of_day(&mut self) -> Result<()> {
+        // We count attempts to do the end of day job as a "success" to actually
+        // not "ddos" the payment provider backend.
+        self.end_of_day_last_instant = std::time::Instant::now();
+
         // Cancel all possible pending transactions.
         self.cancel_pending().await?;
 
@@ -331,6 +345,11 @@ impl Feig {
     /// The call will either return some [CardInfo] or [None] - if there is no
     /// card presented during the specified [config.read_card_timeout].
     pub async fn read_card(&mut self) -> Result<CardInfo> {
+        if self.end_of_day_last_instant.elapsed() >= self.end_of_day_max_interval
+            && self.transactions.is_empty()
+        {
+            self.end_of_day().await?;
+        }
         let timeout_sec = self.socket.config().feig_config.read_card_timeout;
         let request = packets::ReadCard {
             timeout_sec,
