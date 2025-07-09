@@ -112,7 +112,7 @@ impl Feig {
     }
 
     /// Returns the system information of the feig-terminal.
-    async fn get_system_info(
+    pub async fn get_system_info(
         &mut self,
     ) -> Result<feig::packets::CVendFunctionsEnhancedSystemInformationCompletion> {
         let request = feig::packets::CVendFunctions {
