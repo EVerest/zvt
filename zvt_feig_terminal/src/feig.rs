@@ -54,6 +54,9 @@ pub enum Error {
 
     #[error("The presented card requires a PIN entry.")]
     NeedsPinEntry,
+
+    #[error("The config TID failed to be set")]
+    TidMismatch,
 }
 
 /// Default card type, which is chip-card, as defined in Table 6.
@@ -179,7 +182,10 @@ impl Feig {
                 sequences::SetTerminalIdResponse::CompletionData(_) => {
                     drop(stream);
                     let system_info = self.get_system_info().await?;
-                    ensure!(system_info.terminal_id == config.terminal_id);
+                    ensure!(
+                        system_info.terminal_id == config.terminal_id,
+                        Error::TidMismatch
+                    );
                     return Ok(true);
                 }
                 sequences::SetTerminalIdResponse::Abort(data) => {
