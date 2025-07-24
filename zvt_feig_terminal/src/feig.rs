@@ -353,6 +353,7 @@ impl Feig {
         }
         self.initialize().await?;
         self.end_of_day().await?;
+        self.successfully_configured = true;
 
         Ok(())
     }
