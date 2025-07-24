@@ -90,16 +90,21 @@ pub enum WriteFileResponse {
     Abort(packets::Abort),
 }
 
-impl WriteFile {
-    pub fn into_stream<Source>(
-        path: PathBuf,
-        password: usize,
-        adpu_size: u32,
-        src: &mut PacketTransport<Source>,
-    ) -> Pin<Box<impl Stream<Item = Result<WriteFileResponse>> + '_>>
+impl Sequence for WriteFile {
+    type Input = super::packets::WriteFileParameter;
+    type Output = WriteFileResponse;
+
+    fn into_stream<'a, Source>(
+        input: &'a Self::Input,
+        src: &'a mut PacketTransport<Source>,
+    ) -> Pin<Box<dyn Stream<Item = Result<Self::Output>> + Send + 'a>>
     where
         Source: AsyncReadExt + AsyncWriteExt + Unpin + Send,
+        Self: 'a,
     {
+        let path = PathBuf::from(&input.path);
+        let password = input.password;
+        let adpu_size = input.adpu_size;
         // Protocol from the handbook (the numbering is not part of the handbook)
         // 1.1 ECR->PT: Send over the list of all files with their sizes.
         // 1.2 PT->ECR: Ack
