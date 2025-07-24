@@ -54,6 +54,9 @@ pub enum Error {
 
     #[error("The presented card requires a PIN entry.")]
     NeedsPinEntry,
+
+    #[error("The config TID failed to be set")]
+    TidMismatch,
 }
 
 /// Default card type, which is chip-card, as defined in Table 6.
@@ -100,6 +103,9 @@ pub struct Feig {
 
     /// The last end of day job.
     end_of_day_last_instant: std::time::Instant,
+
+    /// Was the terminal successfully configured
+    successfully_configured: bool,
 }
 
 impl Feig {
@@ -113,11 +119,16 @@ impl Feig {
             transactions_max_num,
             end_of_day_max_interval,
             end_of_day_last_instant: std::time::Instant::now(),
+            successfully_configured: false,
         };
 
-        // Ignore the errors from configure (call fails if e.x. the terminal id is
-        // invalid)
-        let _ = this.configure().await;
+        // Ignore the errors from configure beyond setting the flag
+        // (call fails if e.x. the terminal id is invalid)
+        let mut successfully_configured = false;
+        if let Ok(_) = this.configure().await {
+            successfully_configured = true;
+        }
+        this.successfully_configured = successfully_configured;
         Ok(this)
     }
 
@@ -179,7 +190,10 @@ impl Feig {
                 sequences::SetTerminalIdResponse::CompletionData(_) => {
                     drop(stream);
                     let system_info = self.get_system_info().await?;
-                    ensure!(system_info.terminal_id == config.terminal_id);
+                    ensure!(
+                        system_info.terminal_id == config.terminal_id,
+                        Error::TidMismatch
+                    );
                     return Ok(true);
                 }
                 sequences::SetTerminalIdResponse::Abort(data) => {
@@ -329,6 +343,9 @@ impl Feig {
     /// * Initialize the terminal.
     /// * Run end-of-day job.
     pub async fn configure(&mut self) -> Result<()> {
+        if self.successfully_configured {
+            return Ok(());
+        }
         let tid_changed = self.set_terminal_id().await?;
         if tid_changed {
             self.run_diagnosis(packets::DiagnosisType::EmvConfiguration)
@@ -336,6 +353,7 @@ impl Feig {
         }
         self.initialize().await?;
         self.end_of_day().await?;
+        self.successfully_configured = true;
 
         Ok(())
     }
