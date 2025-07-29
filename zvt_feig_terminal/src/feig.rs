@@ -2,9 +2,13 @@ use crate::config::Config;
 use crate::denylist::APPLICATION_ID_DENYLIST_PREFIX;
 use crate::stream::{ResetSequence, TcpStream};
 use anyhow::{anyhow, bail, ensure, Result};
-use log::{info, warn};
+use log::{error, info, warn};
 use num_traits::FromPrimitive;
+use serde::Deserialize;
+use serde_json;
 use std::collections::HashMap;
+use std::fs::read_to_string;
+use std::path::Path;
 use std::time::Duration;
 use tokio_stream::StreamExt;
 use zvt::{constants, feig, packets, sequences};
@@ -88,6 +92,25 @@ const PAYMENT_TYPE: Option<u8> = Some(0x40);
 /// This identifier is used in BMP60 when transmitting the individual reference
 /// number to the host. It allows us to tack payments at Lavego.
 const BMP_PREFIX: &str = "AC";
+
+/// Maximum length for ADPU packets during firmware update
+const MAX_LEN_ADPU: u16 = 1u16 << 15;
+
+#[derive(Deserialize)]
+struct UpdateSpec {
+    version: String,
+}
+
+/// Returns the desired version of the App.
+///
+/// We're using the app1/update.spec as a proxy for the version of the entire
+/// firmware update. Returns an error if the desired version cannot be read.
+fn get_desired_version(payload_dir: &Path) -> Result<String> {
+    let path = payload_dir.join("app1/update.spec");
+    let update_spec_str = read_to_string(path)?;
+    let update_spec: UpdateSpec = serde_json::from_str(&update_spec_str)?;
+    Ok(update_spec.version)
+}
 
 pub struct Feig {
     socket: TcpStream,
@@ -643,5 +666,76 @@ impl Feig {
             amount: status_information.amount.map(|inner| inner as u64),
             trace_number: status_information.trace_number.map(|inner| inner as u64),
         })
+    }
+
+    /// Updates the firmware of the payment terminal.
+    ///
+    /// This method performs a firmware update on the connected payment terminal.
+    /// The update will be skipped if the current version matches the desired version
+    /// (unless `force` is set to true).
+    ///
+    /// # Arguments
+    /// * `payload_dir` - Path to the directory containing the firmware update files
+    /// * `force` - If true, forces the update even if the current version matches the desired version
+    ///
+    /// # Returns
+    /// Returns `Ok(())` if the update was successful or skipped, or an error if the update failed.
+    pub async fn update_firmware(&mut self, payload_dir: &Path, force: bool) -> Result<()> {
+        // Check the current version of the software
+        let system_info = self.get_system_info().await?;
+        let current_version = system_info.sw_version;
+        info!("Current software version: {}", current_version);
+
+        // Check if we have to run the update
+        if !force {
+            match get_desired_version(payload_dir) {
+                Ok(desired_version) => {
+                    info!("Desired software version: {}", desired_version);
+                    // We can't go for strict equality since the desired version
+                    // contains just a semantic version e.x. `2.0.12` and the
+                    // actual also contains the language e.x. `GER-APP-v2.0.12`.
+                    if current_version.contains(&desired_version) {
+                        info!("Skipping update - current version already matches desired version");
+                        return Ok(());
+                    }
+                }
+                Err(err) => {
+                    warn!("Failed to get the desired version: {}", err);
+                    // Continue with update even if we can't read the desired version
+                }
+            }
+        }
+
+        self.end_of_day().await?;
+
+        // Update the firmware
+        info!("Starting firmware update from directory: {:?}", payload_dir);
+        let config = self.socket.config().clone();
+
+        let request = feig::packets::WriteFileParameter {
+            path: payload_dir
+                .to_str()
+                .ok_or(anyhow!("Not a string"))?
+                .to_owned(),
+            password: config.feig_config.password,
+            adpu_size: MAX_LEN_ADPU.into(),
+        };
+
+        let mut stream = feig::sequences::WriteFile::into_stream(request, &mut self.socket);
+        while let Some(response) = stream.next().await {
+            match response {
+                Err(_) => bail!("Failed to update the terminal"),
+                Ok(inner) => {
+                    info!("Updating the terminal {:?}", inner);
+                    if let feig::sequences::WriteFileResponse::Abort(abort) = inner {
+                        bail!("Failed to update the terminal {abort:?}")
+                    }
+                }
+            }
+        }
+
+        info!("Updated the firmware");
+
+        Ok(())
     }
 }

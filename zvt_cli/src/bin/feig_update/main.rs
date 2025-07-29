@@ -130,12 +130,14 @@ async fn main() -> Result<()> {
 
     {
         // Update the app.
-        let mut stream = feig::sequences::WriteFile::into_stream(
-            args.payload_dir,
-            args.password,
-            MAX_LEN_ADPU.into(),
-            &mut socket,
-        );
+        let request = feig::packets::WriteFileParameter {
+            path: args.payload_dir.to_str().unwrap().to_owned(),
+            password: args.password,
+            adpu_size: MAX_LEN_ADPU.into(),
+        };
+
+        let mut stream = feig::sequences::WriteFile::into_stream(&request, &mut socket);
+
         while let Some(response) = stream.next().await {
             match response {
                 Err(_) => panic!("Failed to update the terminal"),

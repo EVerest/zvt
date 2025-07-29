@@ -84,6 +84,16 @@ pub struct WriteFile {
     pub tlv: Option<tlv::WriteFile>,
 }
 
+/// The paraemters to write the files. This packet does not exist and we never
+/// send it- we use it however in the sequences::WriteFile.
+#[derive(Debug, PartialEq, Zvt)]
+#[zvt_control_field(class = 0x08, instr = 0x14)]
+pub struct WriteFileParameter {
+    pub path: String,
+    pub password: usize,
+    pub adpu_size: u32,
+}
+
 /// Configuration packages. They all use the "Change Configuration" flow, but
 /// with vastly different parameters, hence we have one for each flow. The Change Configuration
 /// is described in 2.40, but since this is very hardware manufacturer specific, we put this one
