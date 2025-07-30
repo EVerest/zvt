@@ -11,7 +11,7 @@ use anyhow::{bail, Result};
 use async_stream::stream;
 use futures::stream::BoxStream;
 use log::{debug, info, warn};
-use std::io::{Error, ErrorKind};
+use crate::feig::Error as FeigError;
 use std::net::SocketAddrV4;
 use std::time::Duration;
 use tokio_stream::StreamExt;
@@ -87,7 +87,7 @@ mod outer {
                             drop(stream);
                             return Ok(socket);
                         }
-                        bail!(Error::new(ErrorKind::NotConnected, format!("Wrong device. Expected {}, got {}", expected_serial, actual_serial)))
+                        bail!(FeigError::IncorrectDeviceId{expected: expected_serial, received: actual_serial})
                     },
                     feig::sequences::GetSystemInfoResponse::Abort(packet) => bail!(zvt::ZVTError::Aborted(packet.error))
                 }
