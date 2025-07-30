@@ -42,9 +42,9 @@ impl length::Length for BatteryVoltage {
     fn deserialize(bytes: &[u8]) -> ZVTResult<(usize, &[u8])> {
         println!("Received bytes of {bytes:?}");
         if bytes.len() <= 4 {
-            return Ok((0, bytes));
+            Ok((0, bytes))
         } else {
-            return Ok((4, bytes));
+            Ok((4, bytes))
         }
     }
 

@@ -61,6 +61,9 @@ pub enum Error {
 
     #[error("The config TID failed to be set")]
     TidMismatch,
+
+    #[error("Incorrect device id. Expected {expected}, received {received}")]
+    IncorrectDeviceId { expected: String, received: String },
 }
 
 /// Default card type, which is chip-card, as defined in Table 6.
