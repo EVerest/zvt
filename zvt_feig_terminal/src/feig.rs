@@ -166,10 +166,15 @@ impl Feig {
             password: None,
             instr: 1,
         };
+        let mut error = zvt::ZVTError::IncompleteData.into();
         let mut stream = feig::sequences::GetSystemInfo::into_stream(request, &mut self.socket);
         while let Some(response) = stream.next().await {
-            let Ok(response) = response else {
-                continue;
+            let response = match response {
+                Ok(response) => response,
+                Err(err) => {
+                    error = err;
+                    continue;
+                }
             };
             match response {
                 feig::sequences::GetSystemInfoResponse::CVendFunctionsEnhancedSystemInformationCompletion(packet) => {
@@ -178,7 +183,7 @@ impl Feig {
                 feig::sequences::GetSystemInfoResponse::Abort(packet) => bail!(zvt::ZVTError::Aborted(packet.error))
             }
         }
-        bail!(zvt::ZVTError::IncompleteData)
+        Err(error)
     }
 
     /// Sets the terminal id.
@@ -207,10 +212,15 @@ impl Feig {
 
         info!("Updating the terminal_id to {terminal_id}");
 
+        let mut error = zvt::ZVTError::IncompleteData.into();
         let mut stream = sequences::SetTerminalId::into_stream(request, &mut self.socket);
         while let Some(response) = stream.next().await {
-            let Ok(response) = response else {
-                continue;
+            let response = match response {
+                Ok(response) => response,
+                Err(err) => {
+                    error = err;
+                    continue;
+                }
             };
             match response {
                 sequences::SetTerminalIdResponse::CompletionData(_) => {
@@ -227,8 +237,7 @@ impl Feig {
                 }
             }
         }
-
-        bail!(zvt::ZVTError::IncompleteData)
+        Err(error)
     }
 
     async fn run_diagnosis(&mut self, diagnosis: packets::DiagnosisType) -> Result<()> {
@@ -238,10 +247,18 @@ impl Feig {
             }),
         };
 
+        let mut error = zvt::ZVTError::IncompleteData.into();
         let mut stream = sequences::Diagnosis::into_stream(request, &mut self.socket);
         while let Some(response) = stream.next().await {
+            let response = match response {
+                Ok(response) => response,
+                Err(err) => {
+                    error = err;
+                    continue;
+                }
+            };
             use sequences::DiagnosisResponse::*;
-            match response? {
+            match response {
                 SetTimeAndDate(data) => log::debug!("{data:#?}"),
                 PrintLine(data) => log::debug!("{}", data.text),
                 PrintTextBlock(data) => log::debug!("{data:#?}"),
@@ -249,18 +266,24 @@ impl Feig {
                 Abort(_) => bail!("Received Abort."),
             }
         }
-        Ok(())
+        Err(error)
     }
 
     /// Initializes the feig-terminal.
     async fn initialize(&mut self) -> Result<()> {
         let password = self.socket.config().feig_config.password;
         let request = packets::Initialization { password };
+
+        let mut error = zvt::ZVTError::IncompleteData.into();
         let mut stream = sequences::Initialization::into_stream(request, &mut self.socket);
         while let Some(response) = stream.next().await {
             use sequences::InitializationResponse::*;
-            let Ok(response) = response else {
-                continue;
+            let response = match response {
+                Ok(response) => response,
+                Err(err) => {
+                    error = err;
+                    continue;
+                }
             };
             match response {
                 IntermediateStatusInformation(_) => (),
@@ -272,8 +295,7 @@ impl Feig {
                 }
             }
         }
-
-        bail!(zvt::ZVTError::IncompleteData)
+        Err(error)
     }
 
     /// Returns the pending transaction.
@@ -286,10 +308,15 @@ impl Feig {
             ..packets::PartialReversal::default()
         };
 
+        let mut error = zvt::ZVTError::IncompleteData.into();
         let mut stream = sequences::PartialReversal::into_stream(request, &mut self.socket);
         while let Some(response) = stream.next().await {
-            let Ok(response) = response else {
-                continue;
+            let response = match response {
+                Ok(response) => response,
+                Err(err) => {
+                    error = err;
+                    continue;
+                }
             };
             match response {
                 sequences::PartialReversalResponse::PartialReversalAbort(data) => {
@@ -306,8 +333,7 @@ impl Feig {
                 _ => bail!(Error::UnexpectedPacket),
             }
         }
-
-        bail!(zvt::ZVTError::IncompleteData)
+        Err(error)
     }
 
     /// Cancels all pending transactions.
@@ -335,12 +361,18 @@ impl Feig {
 
         let password = self.socket.config().feig_config.password;
         let request = packets::EndOfDay { password };
+
+        let mut error = zvt::ZVTError::IncompleteData.into();
         let mut stream = sequences::EndOfDay::into_stream(request, &mut self.socket);
         // Note: The timeout might be too little as this needs a call to the
         // PT's host.
         while let Some(response) = stream.next().await {
-            let Ok(response) = response else {
-                continue;
+            let response = match response {
+                Ok(response) => response,
+                Err(err) => {
+                    error = err;
+                    continue;
+                }
             };
             match response {
                 sequences::EndOfDayResponse::CompletionData(_) => return Ok(()),
@@ -358,8 +390,7 @@ impl Feig {
                 _ => {}
             }
         }
-
-        bail!(zvt::ZVTError::IncompleteData)
+        Err(error)
     }
 
     /// Initializes the connection.
@@ -414,10 +445,15 @@ impl Feig {
             retry,
             Duration::from_secs((timeout_sec + 2) as u64),
         );
+        let mut error = zvt::ZVTError::IncompleteData.into();
         let mut card_info = None;
         while let Some(response) = stream.next().await {
-            let Ok(response) = response else {
-                continue;
+            let response = match response {
+                Ok(response) => response,
+                Err(err) => {
+                    error = err;
+                    continue;
+                }
             };
             match response {
                 sequences::ReadCardResponse::Abort(data) => {
@@ -467,7 +503,7 @@ impl Feig {
             }
         }
 
-        card_info.ok_or(zvt::ZVTError::IncompleteData.into())
+        card_info.ok_or(error)
     }
 
     /// Begins a transaction.
@@ -508,11 +544,16 @@ impl Feig {
             ..packets::Reservation::default()
         };
 
-        let mut stream = sequences::Reservation::into_stream(request, &mut self.socket);
+        let mut error = zvt::ZVTError::IncompleteData.into();
         let mut receipt_no = None;
+        let mut stream = sequences::Reservation::into_stream(request, &mut self.socket);
         while let Some(response) = stream.next().await {
-            let Ok(response) = response else {
-                continue;
+            let response = match response {
+                Ok(response) => response,
+                Err(err) => {
+                    error = err;
+                    continue;
+                }
             };
             match response {
                 sequences::AuthorizationResponse::Abort(data) => {
@@ -539,7 +580,7 @@ impl Feig {
         }
 
         match receipt_no {
-            None => bail!(zvt::ZVTError::IncompleteData),
+            None => Err(error),
             Some(receipt_no) => {
                 self.transactions.insert(token.to_string(), receipt_no);
                 Ok(())
@@ -555,10 +596,15 @@ impl Feig {
             receipt_no: Some(receipt_no),
         };
 
+        let mut error = zvt::ZVTError::IncompleteData.into();
         let mut stream = sequences::PreAuthReversal::into_stream(request, &mut self.socket);
         while let Some(response) = stream.next().await {
-            let Ok(response) = response else {
-                continue;
+            let response = match response {
+                Ok(response) => response,
+                Err(err) => {
+                    error = err;
+                    continue;
+                }
             };
             match response {
                 sequences::PartialReversalResponse::CompletionData(_) => return Ok(()),
@@ -568,8 +614,7 @@ impl Feig {
                 _ => {}
             }
         }
-
-        bail!(zvt::ZVTError::IncompleteData)
+        Err(error)
     }
 
     /// Cancels a transaction.
@@ -638,12 +683,17 @@ impl Feig {
             }),
         };
 
+        let mut error = zvt::ZVTError::IncompleteData.into();
         let mut stream = sequences::PartialReversal::into_stream(request, &mut self.socket);
         let mut status_information = None;
         while let Some(response) = stream.next().await {
             use sequences::PartialReversalResponse::*;
-            let Ok(response) = response else {
-                continue;
+            let response = match response {
+                Ok(response) => response,
+                Err(err) => {
+                    error = err;
+                    continue;
+                }
             };
             match response {
                 IntermediateStatusInformation(_) | CompletionData(_) => (),
@@ -659,7 +709,7 @@ impl Feig {
             self.end_of_day().await?;
         }
 
-        let status_information = status_information.ok_or(zvt::ZVTError::IncompleteData)?;
+        let status_information = status_information.ok_or(error)?;
         Ok(TransactionSummary {
             terminal_id: status_information
                 .terminal_id
@@ -726,14 +776,8 @@ impl Feig {
 
         let mut stream = feig::sequences::WriteFile::into_stream(request, &mut self.socket);
         while let Some(response) = stream.next().await {
-            match response {
-                Err(_) => bail!("Failed to update the terminal"),
-                Ok(inner) => {
-                    info!("Updating the terminal {:?}", inner);
-                    if let feig::sequences::WriteFileResponse::Abort(abort) = inner {
-                        bail!("Failed to update the terminal {abort:?}")
-                    }
-                }
+            if let feig::sequences::WriteFileResponse::Abort(abort) = response? {
+                bail!("Failed to update the terminal {abort:?}")
             }
         }
 
