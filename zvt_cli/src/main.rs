@@ -41,7 +41,7 @@ struct FactoryResetArgs {}
 /// Runs registration.
 #[argh(subcommand, name = "registration")]
 struct RegistrationArgs {
-    /// currency code
+    /// currency code. Defauls to 978 (= EUR).
     #[argh(option, default = "978")]
     currency_code: usize,
 
