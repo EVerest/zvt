@@ -6,12 +6,11 @@
 //! around [sequence::Sequence] - which is responsible for restarting a
 //! dropped connection and terminating it on errors.s
 use crate::config::Config;
-
+use crate::feig::Error as FeigError;
 use anyhow::{bail, Result};
 use async_stream::stream;
 use futures::stream::BoxStream;
 use log::{debug, info, warn};
-use crate::feig::Error as FeigError;
 use std::net::SocketAddrV4;
 use std::time::Duration;
 use tokio_stream::StreamExt;
