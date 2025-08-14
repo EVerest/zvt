@@ -271,7 +271,13 @@ impl Feig {
 
     /// Initializes the feig-terminal.
     async fn initialize(&mut self) -> Result<()> {
-        let password = self.socket.config().feig_config.password;
+        let config = self.socket.config();
+        let terminal_id = config.terminal_id.parse::<usize>()?;
+        if terminal_id == 0 {
+            info!("Initialize: No `terminal-id` assigned, returning");
+            return Ok(());
+        }
+        let password = config.feig_config.password;
         let request = packets::Initialization { password };
 
         let mut error = zvt::ZVTError::IncompleteData.into();
@@ -352,6 +358,13 @@ impl Feig {
     /// end of day job. Caution: Calling this will wipe all ongoing
     /// transactions.
     async fn end_of_day(&mut self) -> Result<()> {
+        let config = self.socket.config();
+        let terminal_id = config.terminal_id.parse::<usize>()?;
+        if terminal_id == 0 {
+            info!("End-of-Day: No `terminal-id` assigned, returning");
+            return Ok(());
+        }
+
         // We count attempts to do the end of day job as a "success" to actually
         // not "ddos" the payment provider backend.
         self.end_of_day_last_instant = std::time::Instant::now();
