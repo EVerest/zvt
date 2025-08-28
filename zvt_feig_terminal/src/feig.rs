@@ -519,6 +519,10 @@ impl Feig {
         card_info.ok_or(error)
     }
 
+    pub async fn set_pre_auth_amount(&mut self, pre_authorization_amount: usize) -> Result<()> {
+        self.socket.set_pre_auth_amount(pre_authorization_amount)
+    }
+
     /// Begins a transaction.
     ///
     /// The transaction must be finished with either [Feig::cancel_transaction]
