@@ -519,10 +519,6 @@ impl Feig {
         card_info.ok_or(error)
     }
 
-    pub async fn set_pre_auth_amount(&mut self, pre_authorization_amount: usize) -> Result<()> {
-        self.socket.set_pre_auth_amount(pre_authorization_amount)
-    }
-
     /// Begins a transaction.
     ///
     /// The transaction must be finished with either [Feig::cancel_transaction]
@@ -535,7 +531,7 @@ impl Feig {
     ///
     /// # Arguments
     /// * `token` - The token to identify the transaction with.
-    pub async fn begin_transaction(&mut self, token: &str) -> Result<()> {
+    pub async fn begin_transaction(&mut self, token: &str, pre_authorization_amount: usize) -> Result<()> {
         if self.transactions.len() == self.transactions_max_num {
             bail!(Error::ActiveTransaction(format!(
                 "Maximum number of transactions reached: {}",
@@ -546,6 +542,8 @@ impl Feig {
         if self.transactions.contains_key(token) {
             bail!(Error::ActiveTransaction("Token already in use".to_string()))
         }
+
+        let _ = self.socket.set_pre_auth_amount(pre_authorization_amount);
 
         let config = self.socket.config();
         let request = packets::Reservation {
