@@ -543,7 +543,7 @@ impl Feig {
             bail!(Error::ActiveTransaction("Token already in use".to_string()))
         }
 
-        let _ = self.socket.set_pre_auth_amount(pre_authorization_amount);
+        self.socket.set_pre_authorization_amount(pre_authorization_amount);
 
         let config = self.socket.config();
         let request = packets::Reservation {

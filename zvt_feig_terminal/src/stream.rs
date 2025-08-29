@@ -129,9 +129,8 @@ impl TcpStream {
         &self.config
     }
 
-    pub fn set_pre_auth_amount(&mut self, pre_authorization_amount: usize) -> Result<()> {
+    pub fn set_pre_authorization_amount(&mut self, pre_authorization_amount: usize){
         self.config.feig_config.pre_authorization_amount = pre_authorization_amount;
-        Ok(())
     }
 }
 
