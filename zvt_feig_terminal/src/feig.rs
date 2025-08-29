@@ -531,7 +531,7 @@ impl Feig {
     ///
     /// # Arguments
     /// * `token` - The token to identify the transaction with.
-    pub async fn begin_transaction(&mut self, token: &str) -> Result<()> {
+    pub async fn begin_transaction(&mut self, token: &str, pre_authorization_amount: usize) -> Result<()> {
         if self.transactions.len() == self.transactions_max_num {
             bail!(Error::ActiveTransaction(format!(
                 "Maximum number of transactions reached: {}",
@@ -542,6 +542,8 @@ impl Feig {
         if self.transactions.contains_key(token) {
             bail!(Error::ActiveTransaction("Token already in use".to_string()))
         }
+
+        self.socket.set_pre_authorization_amount(pre_authorization_amount);
 
         let config = self.socket.config();
         let request = packets::Reservation {
