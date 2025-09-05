@@ -11,7 +11,7 @@ use anyhow::{bail, Result};
 use async_stream::stream;
 use futures::stream::BoxStream;
 use log::{debug, info, warn};
-use std::net::SocketAddrV4;
+use std::net::{SocketAddr, SocketAddrV4};
 use std::time::Duration;
 use tokio_stream::StreamExt;
 use zvt::{encoding, feig, io, packets, sequences, sequences::Sequence};
@@ -46,9 +46,17 @@ mod outer {
         pub async fn connect(config: &Config) -> Result<io::PacketTransport<InnerTcpStream>> {
             // Configuration byte.
             pub const CONFIG_BYTE: u8 = 0xde;
+            let address = SocketAddr::V4(SocketAddrV4::new(config.ip_address, 22000));
+            #[cfg(not(test))]
+            let source: InnerTcpStream = {
+                let socket = tokio::net::TcpSocket::new_v4()?;
+                socket.set_keepalive(true)?;
+                socket.set_linger(Some(Duration::from_secs(0)))?;
+                socket.connect(address).await?
+            };
+            #[cfg(test)]
+            let source = InnerTcpStream::connect(address).await?;
 
-            let source =
-                InnerTcpStream::connect(SocketAddrV4::new(config.ip_address, 22000)).await?;
             let mut socket = io::PacketTransport { source };
 
             let request = packets::Registration {
@@ -127,10 +135,6 @@ impl TcpStream {
     /// Returns the config used to construct the stream.
     pub fn config(&self) -> &Config {
         &self.config
-    }
-
-    pub fn set_pre_authorization_amount(&mut self, pre_authorization_amount: usize){
-        self.config.feig_config.pre_authorization_amount = pre_authorization_amount;
     }
 }
 
@@ -373,7 +377,6 @@ mod test {
         Config {
             feig_config: FeigConfig {
                 currency: 0,
-                pre_authorization_amount: 0,
                 read_card_timeout: 15,
                 password: 123456,
                 end_of_day_max_interval: 1000,
