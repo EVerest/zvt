@@ -12,7 +12,7 @@ A crate to interact with payment terminals (ECRs) that use the ZVT protocol, inc
 """
 
 [dependencies]
-anyhow = "1.0.70"
+anyhow = "1.0.82"
 argh = "0.1.12"
 env_logger = "0.10.0"
 log = "0.4.19"
