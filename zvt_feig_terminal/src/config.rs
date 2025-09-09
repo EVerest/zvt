@@ -15,10 +15,6 @@ pub struct FeigConfig {
     #[serde(deserialize_with = "deserialize_iso_4217")]
     pub currency: usize,
 
-    /// The pre-authorization amount in the smallest currency unit (e.x. Cent).
-    #[serde(default = "pre_authorization_amount")]
-    pub pre_authorization_amount: usize,
-
     /// The default time to wait for reading a card in seconds. While a card is being read, the
     /// payment terminal cannot do anything else (like refunding a transaction for example).
     #[serde(default = "read_card_timeout")]
@@ -53,11 +49,6 @@ const fn read_card_timeout() -> u8 {
     15
 }
 
-/// The default pre-authorization amount in Cent (returns 25 EUR).
-const fn pre_authorization_amount() -> usize {
-    2500
-}
-
 /// The default duration between end of day jobs.
 const fn end_of_day_max_interval() -> u64 {
     24 * 60 * 60
@@ -67,7 +58,6 @@ impl Default for FeigConfig {
     fn default() -> Self {
         Self {
             currency: currency(),
-            pre_authorization_amount: pre_authorization_amount(),
             read_card_timeout: read_card_timeout(),
             password: 0,
             end_of_day_max_interval: end_of_day_max_interval(),
@@ -130,21 +120,16 @@ mod tests {
 
         let with_currency = serde_json::from_str::<FeigConfig>("{\"currency\": \"GBP\"}").unwrap();
         assert_eq!(with_currency.currency, 826);
-        assert_eq!(with_currency.pre_authorization_amount, 2500);
 
         let with_all = serde_json::from_str::<FeigConfig>(
             "{\"currency\": \"GBP\", \"pre_authorization_amount\": 10, \"end_of_day_max_interval\": 1234}",
         )
         .unwrap();
         assert_eq!(with_all.currency, 826);
-        assert_eq!(with_all.pre_authorization_amount, 10);
         assert_eq!(with_all.end_of_day_max_interval, 1234);
 
         // Invalid inputs.
         assert!(serde_json::from_str::<FeigConfig>("{\"currency\": \"ABC\"}").is_err());
         assert!(serde_json::from_str::<FeigConfig>("{\"currency\": 123}").is_err());
-        assert!(
-            serde_json::from_str::<FeigConfig>("{\"pre_authorization_amount\": \"AB\"}").is_err()
-        );
     }
 }

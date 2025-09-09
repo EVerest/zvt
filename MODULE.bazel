@@ -1,0 +1,34 @@
+module(
+    name = "zvt",
+    version = "0.1.0",
+    repo_name = "zvt",
+)
+
+bazel_dep(name = "rules_rust", version = "0.64.0")
+
+RUST_EDITION = "2024"
+RUST_VERSION = "1.88.0"
+
+rust = use_extension("@rules_rust//rust:extensions.bzl", "rust")
+rust.toolchain(
+    edition = RUST_EDITION,
+    versions = [RUST_VERSION],
+)
+
+use_repo(rust, "rust_toolchains")
+register_toolchains("@rust_toolchains//:all")
+
+crate_index = use_extension("@rules_rust//crate_universe:extensions.bzl", "crate")
+crate_index.from_cargo(
+    name = "crate_index",
+    cargo_lockfile = "//:Cargo.lock",
+    manifests = [
+        "//:Cargo.toml",
+        "//zvt:Cargo.toml",
+        "//zvt_builder:Cargo.toml",
+        "//zvt_cli:Cargo.toml",
+        "//zvt_derive:Cargo.toml",
+        "//zvt_feig_terminal:Cargo.toml",
+    ],
+)
+use_repo(crate_index, "crate_index")

@@ -115,10 +115,19 @@ fn get_desired_version(payload_dir: &Path) -> Result<String> {
     Ok(update_spec.version)
 }
 
+/// Metadata of the transaction.
+struct TransactionData {
+    /// The receipt number of the transaction.
+    receipt_no: usize,
+
+    /// The pre-auth amount of the transaction.
+    pre_authorization_amount: usize,
+}
+
 pub struct Feig {
     socket: TcpStream,
     /// Map of active transactions to their receipt-number.
-    transactions: HashMap<String, usize>,
+    transactions: HashMap<String, TransactionData>,
 
     /// Maximum number of concurrent transactions.
     transactions_max_num: usize,
@@ -531,7 +540,11 @@ impl Feig {
     ///
     /// # Arguments
     /// * `token` - The token to identify the transaction with.
-    pub async fn begin_transaction(&mut self, token: &str, pre_authorization_amount: usize) -> Result<()> {
+    pub async fn begin_transaction(
+        &mut self,
+        token: &str,
+        pre_authorization_amount: usize,
+    ) -> Result<()> {
         if self.transactions.len() == self.transactions_max_num {
             bail!(Error::ActiveTransaction(format!(
                 "Maximum number of transactions reached: {}",
@@ -543,12 +556,10 @@ impl Feig {
             bail!(Error::ActiveTransaction("Token already in use".to_string()))
         }
 
-        self.socket.set_pre_authorization_amount(pre_authorization_amount);
-
         let config = self.socket.config();
         let request = packets::Reservation {
             currency: Some(config.feig_config.currency),
-            amount: Some(config.feig_config.pre_authorization_amount),
+            amount: Some(pre_authorization_amount),
             payment_type: PAYMENT_TYPE,
             tlv: Some(packets::tlv::PreAuthData {
                 bmp_data: Some(packets::tlv::Bmp60 {
@@ -597,7 +608,12 @@ impl Feig {
         match receipt_no {
             None => Err(error),
             Some(receipt_no) => {
-                self.transactions.insert(token.to_string(), receipt_no);
+                let transaction_data = TransactionData {
+                    receipt_no,
+                    pre_authorization_amount,
+                };
+                self.transactions
+                    .insert(token.to_string(), transaction_data);
                 Ok(())
             }
         }
@@ -645,8 +661,9 @@ impl Feig {
         let removed = self.transactions.remove(token);
         match removed {
             None => bail!(Error::UnknownToken(token.to_string())),
-            Some(receipt_no) => {
-                self.cancel_transaction_by_receipt_no(receipt_no).await?;
+            Some(transaction_data) => {
+                self.cancel_transaction_by_receipt_no(transaction_data.receipt_no)
+                    .await?;
 
                 // Run end of day if we don't have any pending transactions
                 if self.transactions.is_empty() {
@@ -675,18 +692,17 @@ impl Feig {
         amount: u64,
     ) -> Result<TransactionSummary> {
         let removed = self.transactions.remove(token);
-        if removed.is_none() {
+        let Some(removed) = removed else {
             bail!(Error::UnknownToken(token.to_string()));
-        }
+        };
 
         let config = self.socket.config();
-        let reversal_amount = config
-            .feig_config
+        let reversal_amount = removed
             .pre_authorization_amount
             .saturating_sub(amount as usize);
 
         let request = packets::PartialReversal {
-            receipt_no: Some(removed.unwrap()),
+            receipt_no: Some(removed.receipt_no),
             currency: Some(config.feig_config.currency),
             amount: Some(reversal_amount),
             payment_type: PAYMENT_TYPE,
