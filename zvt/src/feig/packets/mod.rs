@@ -40,7 +40,6 @@ struct BatteryVoltage {}
 
 impl length::Length for BatteryVoltage {
     fn deserialize(bytes: &[u8]) -> ZVTResult<(usize, &[u8])> {
-        println!("Received bytes of {bytes:?}");
         if bytes.len() <= 4 {
             Ok((0, bytes))
         } else {
