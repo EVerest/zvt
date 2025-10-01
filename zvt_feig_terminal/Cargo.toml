@@ -5,6 +5,9 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+with_lavego_error_codes = ["zvt/with_lavego_error_codes"]
+
 [dependencies]
 zvt = { version = "0.1.0", path = "../zvt" }
 anyhow = "1.0.75"
