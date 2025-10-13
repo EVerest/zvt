@@ -4,6 +4,18 @@ use num_derive::FromPrimitive;
 #[derive(Debug, PartialEq, FromPrimitive, Clone, Copy)]
 #[repr(u8)]
 pub enum ErrorMessages {
+    #[cfg(feature = "with_lavego_error_codes")]
+    Declined = 0x05,
+    #[cfg(feature = "with_lavego_error_codes")]
+    ContactlessTransactionCountExceeded = 0x13,
+    #[cfg(feature = "with_lavego_error_codes")]
+    CardExpiredLavego = 0x21,
+    #[cfg(feature = "with_lavego_error_codes")]
+    TidNotActivated = 0x3a,
+    #[cfg(feature = "with_lavego_error_codes")]
+    ReservationNotPossible = 0x33,
+    #[cfg(feature = "with_lavego_error_codes")]
+    PinEntryRequired = 0x41,
     CardNotReadable = 0x64,
     CardDataNotPresent = 0x65,
     ProcessingError = 0x66,
@@ -167,6 +179,18 @@ impl std::fmt::Display for ErrorMessages {
             Self::BaudRateNotSupported => write!(f, "baudrate not supported"),
             Self::RegisterUnknown => write!(f, "register unknown"),
             Self::SystemError => write!(f, "system error (= other/unknown error), See TLV tags 1F16 and 1F17"),
+            #[cfg(feature = "with_lavego_error_codes")]
+            Self::Declined => write!(f, "declined"),
+            #[cfg(feature = "with_lavego_error_codes")]
+            Self::ContactlessTransactionCountExceeded => write!(f, "contactless transaction count exceeded"),
+            #[cfg(feature = "with_lavego_error_codes")]
+            Self::CardExpiredLavego => write!(f, "card expired"),
+            #[cfg(feature = "with_lavego_error_codes")]
+            Self::TidNotActivated => write!(f, "TID not activated"),
+            #[cfg(feature = "with_lavego_error_codes")]
+            Self::PinEntryRequired => write!(f, "PIN entry required"),
+            #[cfg(feature = "with_lavego_error_codes")]
+            Self::ReservationNotPossible => write!(f, "reservation not possible - pin required"),
         }
     }
 }

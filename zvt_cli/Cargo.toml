@@ -11,6 +11,9 @@ description = """
 A crate to interact with payment terminals (ECRs) that use the ZVT protocol, including stand alone commandline tools to interact with the devices.
 """
 
+[features]
+with_lavego_error_codes = ["zvt/with_lavego_error_codes"]
+
 [dependencies]
 anyhow = "1.0.82"
 argh = "0.1.12"
