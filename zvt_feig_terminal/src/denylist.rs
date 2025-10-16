@@ -4,4 +4,4 @@
 //! https://emv.cool/2020/12/23/Complete-list-of-application-identifiers-AID/
 //! https://www.eftlab.com/knowledge-base/complete-list-of-application-identifiers-aid
 
-pub const APPLICATION_ID_DENYLIST_PREFIX: &[&str] = &["a00000083"];
+pub const APPLICATION_ID_DENYLIST_PREFIX: &[&str] = &["a00000083", "a00000066"];
