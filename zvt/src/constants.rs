@@ -11,11 +11,13 @@ pub enum ErrorMessages {
     #[cfg(feature = "with_lavego_error_codes")]
     CardExpiredLavego = 0x21,
     #[cfg(feature = "with_lavego_error_codes")]
+    PinEntryRequiredx33 = 0x33,
+    #[cfg(feature = "with_lavego_error_codes")]
     TidNotActivated = 0x3a,
     #[cfg(feature = "with_lavego_error_codes")]
-    ReservationNotPossible = 0x33,
+    PinEntryRequiredx3d = 0x3d,
     #[cfg(feature = "with_lavego_error_codes")]
-    PinEntryRequired = 0x41,
+    PinEntryRequiredx41 = 0x41,
     CardNotReadable = 0x64,
     CardDataNotPresent = 0x65,
     ProcessingError = 0x66,
@@ -100,6 +102,16 @@ pub enum ErrorMessages {
 impl std::fmt::Display for ErrorMessages {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            #[cfg(feature = "with_lavego_error_codes")]
+            Self::Declined => write!(f, "declined"),
+            #[cfg(feature = "with_lavego_error_codes")]
+            Self::ContactlessTransactionCountExceeded => write!(f, "contactless transaction count exceeded"),
+            #[cfg(feature = "with_lavego_error_codes")]
+            Self::CardExpiredLavego => write!(f, "card expired"),
+            #[cfg(feature = "with_lavego_error_codes")]
+            Self::PinEntryRequiredx33 | Self::PinEntryRequiredx3d | Self::PinEntryRequiredx41 => write!(f, "PIN entry required"),
+            #[cfg(feature = "with_lavego_error_codes")]
+            Self::TidNotActivated => write!(f, "TID not activated"),
             Self::CardNotReadable => write!(f, "card not readable (LRC-/parity-error)"),
             Self::CardDataNotPresent => write!(f, "card-data not present (neither track-data nor chip found)"),
             Self::ProcessingError => write!(f, "processing-error (also for problems with card-reader mechanism)"),
@@ -179,18 +191,6 @@ impl std::fmt::Display for ErrorMessages {
             Self::BaudRateNotSupported => write!(f, "baudrate not supported"),
             Self::RegisterUnknown => write!(f, "register unknown"),
             Self::SystemError => write!(f, "system error (= other/unknown error), See TLV tags 1F16 and 1F17"),
-            #[cfg(feature = "with_lavego_error_codes")]
-            Self::Declined => write!(f, "declined"),
-            #[cfg(feature = "with_lavego_error_codes")]
-            Self::ContactlessTransactionCountExceeded => write!(f, "contactless transaction count exceeded"),
-            #[cfg(feature = "with_lavego_error_codes")]
-            Self::CardExpiredLavego => write!(f, "card expired"),
-            #[cfg(feature = "with_lavego_error_codes")]
-            Self::TidNotActivated => write!(f, "TID not activated"),
-            #[cfg(feature = "with_lavego_error_codes")]
-            Self::PinEntryRequired => write!(f, "PIN entry required"),
-            #[cfg(feature = "with_lavego_error_codes")]
-            Self::ReservationNotPossible => write!(f, "reservation not possible - pin required"),
         }
     }
 }
