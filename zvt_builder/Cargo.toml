@@ -15,6 +15,6 @@ A crate to interact with payment terminals (ECRs) that use the ZVT protocol, inc
 chrono = "0.4.26"
 hex = "0.4.3"
 log = "0.4.20"
-thiserror = "1.0.43"
+thiserror = "2.0.17"
 yore = "1.0.2"
 zvt_derive = { version = "0.1.0", path = "../zvt_derive" }
