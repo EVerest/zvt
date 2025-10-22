@@ -583,16 +583,10 @@ impl Feig {
             };
             match response {
                 sequences::AuthorizationResponse::Abort(data) => {
-                    use zvt::constants::ErrorMessages::*;
-
                     let err = zvt::constants::ErrorMessages::from_u8(data.error)
                         .ok_or(anyhow!("Unknown error code: 0x{:X}", data.error))?;
-                    match err {
-                        NecessaryDeviceNotPresentOrDefective => {
-                            bail!(Error::NeedsPinEntry)
-                        }
-                        _ => bail!(zvt::ZVTError::Aborted(data.error)),
-                    }
+
+                    bail!(err);
                 }
                 sequences::AuthorizationResponse::StatusInformation(data) => {
                     // Only overwrite the receipt_no if it is contained in the
