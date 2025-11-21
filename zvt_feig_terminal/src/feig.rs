@@ -8,6 +8,7 @@ use serde::Deserialize;
 use serde_json;
 use std::collections::HashMap;
 use std::fs::read_to_string;
+use std::net::Ipv4Addr;
 use std::path::Path;
 use std::time::Duration;
 use tokio_stream::StreamExt;
@@ -165,6 +166,21 @@ impl Feig {
         }
         this.successfully_configured = successfully_configured;
         Ok(this)
+    }
+
+    /// Reconnects under the given ip-address.
+    pub async fn reconnect(&mut self, ip_address: Ipv4Addr) -> Result<()> {
+        let config = {
+            let mut config = self.socket.config().clone();
+            config.ip_address = ip_address;
+            config
+        };
+        self.socket = TcpStream::new(config)?;
+        // Reset this to trigger a network call inside the `configure` call
+        // below.
+        self.successfully_configured = false;
+        // This checks if the new connection is sound.
+        self.configure().await
     }
 
     /// Returns the system information of the feig-terminal.
@@ -684,18 +700,18 @@ impl Feig {
         token: &str,
         amount: u64,
     ) -> Result<TransactionSummary> {
-        let removed = self.transactions.remove(token);
-        let Some(removed) = removed else {
+        let transaction = self.transactions.get(token);
+        let Some(transaction) = transaction else {
             bail!(Error::UnknownToken(token.to_string()));
         };
 
         let config = self.socket.config();
-        let reversal_amount = removed
+        let reversal_amount = transaction
             .pre_authorization_amount
             .saturating_sub(amount as usize);
 
         let request = packets::PartialReversal {
-            receipt_no: Some(removed.receipt_no),
+            receipt_no: Some(transaction.receipt_no),
             currency: Some(config.feig_config.currency),
             amount: Some(reversal_amount),
             payment_type: PAYMENT_TYPE,
@@ -728,12 +744,15 @@ impl Feig {
             }
         }
         drop(stream);
+        // Commiting failed: Bailing here to keep the `token` in
+        // `self.transactions` so we can retry later.
+        let status_information = status_information.ok_or(error)?;
+        let _ = self.transactions.remove(token);
 
         if self.transactions.is_empty() {
-            self.end_of_day().await?;
+            let _ = self.end_of_day().await;
         }
 
-        let status_information = status_information.ok_or(error)?;
         Ok(TransactionSummary {
             terminal_id: status_information
                 .terminal_id

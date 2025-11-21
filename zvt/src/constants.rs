@@ -1,7 +1,6 @@
 use num_derive::FromPrimitive;
 use thiserror::Error;
 
-
 /// Messages as defined under chapter 10.
 #[derive(Debug, PartialEq, FromPrimitive, Clone, Copy, Error)]
 #[repr(u8)]
@@ -73,7 +72,9 @@ pub enum ErrorMessages {
     FallbackToMagneticStripeNotPossibleForNonGiroCard = 0x7c,
     #[error("communication error (communication module does not answer or is not present)")]
     CommunicationError = 0x7d,
-    #[error("fallback to magnetic stripe not possible, debit advice possible (used only for giro-card)")]
+    #[error(
+        "fallback to magnetic stripe not possible, debit advice possible (used only for giro-card)"
+    )]
     FallbackToMagneticStripeNotPossibleForGiroCard2 = 0x7e,
     #[error("function not possible")]
     FunctionNotPossible = 0x83,
