@@ -50,9 +50,15 @@ mod outer {
             #[cfg(not(test))]
             let source: InnerTcpStream = {
                 let socket = tokio::net::TcpSocket::new_v4()?;
-                socket.set_keepalive(true)?;
                 socket.set_linger(Some(Duration::from_secs(0)))?;
-                socket.connect(address).await?
+                let socket = socket.connect(address).await?;
+                // Keepalive must be configured *after* the connect otherwise
+                // it might be ignored by the kernel.
+                let keepalive = socket2::TcpKeepalive::new()
+                    .with_time(Duration::from_secs(10))
+                    .with_interval(Duration::from_secs(5));
+                socket2::SockRef::from(&socket).set_tcp_keepalive(&keepalive)?;
+                socket
             };
             #[cfg(test)]
             let source = InnerTcpStream::connect(address).await?;
