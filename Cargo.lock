@@ -1807,6 +1807,7 @@ dependencies = [
  "pin-project",
  "serde",
  "serde_json",
+ "socket2 0.5.10",
  "thiserror 2.0.17",
  "time",
  "time-macros",
