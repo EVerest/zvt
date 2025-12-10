@@ -162,9 +162,10 @@ where
         Self::Input: std::fmt::Debug,
         Self::Output: std::fmt::Debug,
     {
+        let max_retry_attempts = src.config.feig_config.max_retry_attempts;
         let repeater = futures::stream::repeat(())
             .throttle(std::time::Duration::from_secs(2))
-            .take(20);
+            .take(1 + max_retry_attempts);
 
         Self::into_stream_with_retry(input, src, repeater, TIMEOUT)
     }
@@ -386,6 +387,7 @@ mod test {
                 read_card_timeout: 15,
                 password: 123456,
                 end_of_day_max_interval: 1000,
+                max_retry_attempts: 20,
             },
             ..Config::default()
         }
