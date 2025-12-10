@@ -165,7 +165,7 @@ where
         let max_retry_attempts = src.config.feig_config.max_retry_attempts;
         let repeater = futures::stream::repeat(())
             .throttle(std::time::Duration::from_secs(2))
-            .take(max_retry_attempts);
+            .take(1 + max_retry_attempts);
 
         Self::into_stream_with_retry(input, src, repeater, TIMEOUT)
     }
