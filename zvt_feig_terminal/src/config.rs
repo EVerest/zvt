@@ -28,6 +28,10 @@ pub struct FeigConfig {
     /// force the payment terminals to run them regularly.
     #[serde(default = "end_of_day_max_interval")]
     pub end_of_day_max_interval: u64,
+
+    /// Maximum number of retry attempts for network operations.
+    #[serde(default = "max_retry_attempts")]
+    pub max_retry_attempts: usize,
 }
 
 /// Deserializer which consumes a string code and returns the numerical code.
@@ -54,6 +58,11 @@ const fn end_of_day_max_interval() -> u64 {
     24 * 60 * 60
 }
 
+/// The default maximum number of retry attempts for network operations.
+const fn max_retry_attempts() -> usize {
+    20
+}
+
 impl Default for FeigConfig {
     fn default() -> Self {
         Self {
@@ -61,6 +70,7 @@ impl Default for FeigConfig {
             read_card_timeout: read_card_timeout(),
             password: 0,
             end_of_day_max_interval: end_of_day_max_interval(),
+            max_retry_attempts: max_retry_attempts(),
         }
     }
 }

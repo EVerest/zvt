@@ -473,9 +473,10 @@ impl Feig {
             }),
         };
 
+        let max_retry_attempts = self.socket.config().feig_config.max_retry_attempts;
         let retry = futures::stream::repeat(())
             .throttle(Duration::from_secs(2))
-            .take(20);
+            .take(max_retry_attempts);
         let mut stream = sequences::ReadCard::into_stream_with_retry(
             request,
             &mut self.socket,
