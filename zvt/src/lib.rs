@@ -2,6 +2,7 @@ pub mod constants;
 pub mod feig;
 pub mod io;
 pub mod packets;
+pub mod commands;
 pub mod sequences;
 
 // Reexport everything so we can just use this crate for importing the internals.
