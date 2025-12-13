@@ -424,6 +424,89 @@ pub struct SelectLanguage {
 #[zvt_control_field(class = 0x80, instr = 0x00)]
 pub struct Ack {}
 
+#[derive(Debug, PartialEq)]
+pub struct Nack {
+    pub code: u8, // The error code from the INSTR byte (0 = success, others = error)
+}
+
+impl zvt_builder::ZvtCommand for Nack {
+    const CLASS: u8 = 0x84;
+    const INSTR: u8 = 0x00; // for Nack, INSTR is the error code, that can be any u8
+}
+
+// NOTE: These methods are not actually called during serialization/deserialization.
+// They exist only to satisfy the trait bound required by ZvtSerializerImpl.
+// The actual serialization is handled by the specialized impl below.
+impl zvt_builder::encoding::Encoding<Nack> for zvt_builder::encoding::Default {
+    fn decode(_bytes: &[u8]) -> zvt_builder::ZVTResult<(Nack, &[u8])> {
+        Err(zvt_builder::ZVTError::NonImplemented)
+    }
+
+    fn encode(_input: &Nack) -> Vec<u8> {
+        vec![]
+    }
+}
+
+/// Specialized impl for Nack with ADPU serialization
+/// This impl overrides the default behavior to use `code` as the INSTR byte
+impl zvt_builder::ZvtSerializerImpl<zvt_builder::length::Adpu, zvt_builder::encoding::Default, zvt_builder::encoding::BigEndian> for Nack {
+    fn serialize_tagged(&self, _tag: Option<zvt_builder::Tag>) -> Vec<u8> {
+        // For Nack: [CLASS] [code as INSTR] [length=0]
+        vec![0x84u8, self.code, 0x00]
+    }
+
+    fn deserialize_tagged(bytes: &[u8], _tag: Option<zvt_builder::Tag>) -> zvt_builder::ZVTResult<(Self, &[u8])> {
+        if bytes.len() < 3 {
+            return Err(zvt_builder::ZVTError::IncompleteData);
+        }
+        
+        let class = bytes[0];
+        let code = bytes[1];
+        let length = bytes[2] as usize;
+        
+        // Verify CLASS matches
+        if class != 0x84u8 {
+            return Err(zvt_builder::ZVTError::WrongTag(zvt_builder::Tag((class as u16) << 8 | code as u16)));
+        }
+        
+        // Skip the length field and any data bytes that follow
+        let remaining = &bytes[3 + length..];
+        Ok((Nack { code }, remaining))
+    }
+}
+
+/// Specialized impl for Nack with protocol parsing (Empty length, Default encoding, Default endianness)
+/// Used when Nack is parsed from protocol messages
+/// NOTE: This is identical to the Adpu impl but required due to Rust's trait system
+impl zvt_builder::ZvtSerializerImpl<zvt_builder::length::Empty, zvt_builder::encoding::Default, zvt_builder::encoding::Default> for Nack {
+    fn serialize_tagged(&self, _tag: Option<zvt_builder::Tag>) -> Vec<u8> {
+        // For protocol format: [CLASS] [code as INSTR] [length=0]
+        vec![0x84u8, self.code, 0x00]
+    }
+
+    fn deserialize_tagged(bytes: &[u8], _tag: Option<zvt_builder::Tag>) -> zvt_builder::ZVTResult<(Self, &[u8])> {
+        if bytes.len() < 3 {
+            return Err(zvt_builder::ZVTError::IncompleteData);
+        }
+        
+        let class = bytes[0];
+        let code = bytes[1];
+        let length = bytes[2] as usize;
+
+        // Verify CLASS matches
+        if class != 0x84u8 {
+            return Err(zvt_builder::ZVTError::WrongTag(zvt_builder::Tag((class as u16) << 8 | code as u16)));
+        }
+        
+        // Skip the length field and any data bytes that follow
+        let remaining = &bytes[3 + length..];
+        Ok((Nack { code }, remaining))
+    }
+}
+
+
+
+
 #[cfg(test)]
 pub mod tests {
     use super::*;
@@ -818,6 +901,16 @@ pub mod tests {
             receipt_no: Some(0xffff),
         };
 
+        assert_eq!(actual, expected);
+        assert_eq!(expected.zvt_serialize(), bytes);
+    }
+
+    #[rstest::rstest]
+    fn test_nack() {
+        let bytes = vec![0x84u8, 0x12, 0x00];
+        let (actual, remaining) = Nack::zvt_deserialize(&bytes).unwrap();
+        assert_eq!(remaining.len(), 0);
+        let expected = Nack { code: 0x12 };
         assert_eq!(actual, expected);
         assert_eq!(expected.zvt_serialize(), bytes);
     }
