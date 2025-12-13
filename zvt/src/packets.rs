@@ -144,6 +144,47 @@ pub struct Registration {
     pub tlv: Option<tlv::Registration>,
 }
 
+#[derive(Debug, Default, PartialEq, Zvt)]
+#[zvt_control_field(class = 0x06, instr = 0x01)]
+pub struct Authorization {
+    #[zvt_bmp(number = 0x04, length = length::Fixed<6>, encoding = encoding::Bcd)]
+    pub amount: Option<usize>,
+
+    #[zvt_bmp(number = 0x49, length = length::Fixed<2>, encoding = encoding::Bcd)]
+    pub currency: Option<usize>,
+
+    #[zvt_bmp(number = 0x19)]
+    pub payment_type: Option<u8>,
+
+    #[zvt_bmp(number = 0x0e, length = length::Fixed<2>, encoding = encoding::Bcd)]
+    pub expiry_date: Option<usize>,
+
+    #[zvt_bmp(number = 0x22, length = length::Llv, encoding = encoding::Bcd)]
+    pub card_number: Option<usize>,
+
+    #[zvt_bmp(number = 0x23, length = length::Llv, encoding= encoding::Hex)]
+    pub track_2_data: Option<String>,
+
+    // Unclear how to interpret this.
+    #[zvt_bmp(number = 0x01)]
+    pub timeout: Option<u8>,
+
+    #[zvt_bmp(number = 0x02)]
+    pub maximum_no_of_status_info: Option<u8>,
+
+    #[zvt_bmp(number = 0x05)]
+    pub pump_no: Option<u8>,
+
+    #[zvt_bmp(number = 0x3c, length = length::Lllv)]
+    pub additional_text: Option<String>,
+
+    #[zvt_bmp(number = 0x8a)]
+    pub zvt_card_type: Option<u8>,
+
+    #[zvt_bmp(number = 0x06, length = length::Tlv)]
+    pub tlv: Option<tlv::AuthorizationData>,
+}
+
 #[derive(Debug, Default, PartialEq, Eq, Zvt)]
 #[zvt_control_field(class = 0x06, instr = 0x0f)]
 pub struct CompletionData {
