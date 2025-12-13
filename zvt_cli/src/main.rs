@@ -16,6 +16,7 @@ enum SubCommands {
     Status(StatusArgs),
     FactoryReset(FactoryResetArgs),
     Registration(RegistrationArgs),
+    Authorization(AuthorizationArgs),
     SetTerminalId(SetTerminalIdArgs),
     Initialization(InitializationArgs),
     Diagnosis(DiagnosisArgs),
@@ -48,6 +49,23 @@ struct RegistrationArgs {
     /// config byte. Defaults to 0xDE (= 222).
     #[argh(option, default = "222")]
     config_byte: u8,
+}
+
+#[derive(FromArgs, PartialEq, Debug)]
+/// Do payment using authorization command.
+#[argh(subcommand, name = "pay")]
+struct AuthorizationArgs {
+    /// amount to pay (in cents).
+    #[argh(positional)]
+    amount: usize,
+
+    /// currency code. Defauls to 978 (= EUR).
+    #[argh(option, default = "978")]
+    currency_code: usize,
+
+    /// payment type. Defaults to 0 .
+    #[argh(option, default = "0")]
+    payment_type: u8,
 }
 
 #[derive(FromArgs, PartialEq, Debug)]
@@ -289,6 +307,31 @@ async fn registration(
         use sequences::RegistrationResponse::*;
         match response? {
             CompletionData(data) => log::info!("{data:#?}"),
+        }
+    }
+    Ok(())
+}
+
+async fn authorization(
+    socket: &mut PacketTransport,
+    args: &AuthorizationArgs,
+) -> Result<()> {
+    let request = packets::Authorization {
+        amount: Some(args.amount),
+        currency: Some(args.currency_code),
+        payment_type: Some(args.payment_type),
+        ..Default::default()
+    };
+
+    let mut stream = sequences::Authorization::into_stream(&request, socket);
+    use sequences::AuthorizationResponse::*;
+    while let Some(response) = stream.next().await {
+        match response? {
+            IntermediateStatusInformation(_) | CompletionData(_) => (),
+            PrintLine(data) => log::info!("{}", data.text),
+            PrintTextBlock(data) => log::info!("{data:#?}"),
+            Abort(data) => bail!("Received Abort: {:?}", data),
+            StatusInformation(data) => log::info!("StatusInformation: {:#?}", data),
         }
     }
     Ok(())
@@ -545,6 +588,7 @@ async fn main() -> Result<()> {
         SubCommands::Status(_) => status(&mut socket).await?,
         SubCommands::FactoryReset(_) => factory_reset(&mut socket, args.password).await?,
         SubCommands::Registration(a) => registration(&mut socket, args.password, &a).await?,
+        SubCommands::Authorization(a) => authorization(&mut socket, &a).await?,
         SubCommands::SetTerminalId(a) => set_terminal_id(&mut socket, args.password, &a).await?,
         SubCommands::Initialization(_) => initialization(&mut socket, args.password).await?,
         SubCommands::Diagnosis(a) => diagnosis(&mut socket, &a).await?,
