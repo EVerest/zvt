@@ -433,7 +433,7 @@ pub fn parser(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     derive(&ast)
 }
 
-#[proc_macro_derive(ZvtEnum)]
+#[proc_macro_derive(ZvtEnum, attributes(zvt_instr_any))]
 pub fn zvt_enum(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let ast: syn::DeriveInput = syn::parse(input).unwrap();
     let Data::Enum(ref s) = ast.data else {
@@ -449,11 +449,22 @@ pub fn zvt_enum(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
         }
         let name = &variant.ident;
         let ty = &field.unnamed[0].ty;
-        variants.push(quote!{
-            (<#ty as zvt_builder::ZvtCommand>::CLASS, <#ty as zvt_builder::ZvtCommand>::INSTR) => {
-                return Ok(Self::#name(<#ty as zvt_builder::ZvtSerializer>::zvt_deserialize(&bytes)?.0));
-            }
-        });
+        let has_zvt_instr_any = variant.attrs.iter().any(|attr| attr.path().is_ident("zvt_instr_any"));
+        if has_zvt_instr_any {
+            // For variants with #[zvt_instr_any], match any INSTR with the fixed CLASS
+            variants.push(quote!{
+                (<#ty as zvt_builder::ZvtCommand>::CLASS, _) => {
+                    return Ok(Self::#name(<#ty as zvt_builder::ZvtSerializer>::zvt_deserialize(&bytes)?.0));
+                }
+            });
+        } else {
+            // For regular variants, match both CLASS and INSTR exactly
+            variants.push(quote!{
+                (<#ty as zvt_builder::ZvtCommand>::CLASS, <#ty as zvt_builder::ZvtCommand>::INSTR) => {
+                    return Ok(Self::#name(<#ty as zvt_builder::ZvtSerializer>::zvt_deserialize(&bytes)?.0));
+                }
+            });
+        }
     }
     let name = ast.ident;
     quote! {
