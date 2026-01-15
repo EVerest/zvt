@@ -6,7 +6,7 @@ use thiserror::Error;
 #[repr(u8)]
 pub enum ErrorMessages {
     #[cfg(feature = "with_lavego_error_codes")]
-    #[error("declined, refered voice authorization possible")]
+    #[error("declined, referred voice authorization possible")]
     Declined = 0x02,
     #[cfg(feature = "with_lavego_error_codes")]
     #[error("declined")]
