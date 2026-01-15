@@ -68,6 +68,65 @@ impl Sequence for Registration {
     type Output = RegistrationResponse;
 }
 
+/// Authorization sequence as defined under 2.1.
+///
+/// Using the command Authorization the ECR initiates a payment transaction.
+pub struct Authorization;
+
+/// Response to [packets::Reservation] message, as defined under 2.8.
+///
+/// The response is the same as for Authorization, defined in chapter 2.1.
+#[derive(Debug, ZvtEnum)]
+#[allow(clippy::large_enum_variant)]
+pub enum AuthorizationResponse {
+    /// 2.2.4
+    IntermediateStatusInformation(packets::IntermediateStatusInformation),
+    // 2.2.5 produces no message.
+    /// 2.2.6
+    StatusInformation(packets::StatusInformation),
+    /// 2.2.7
+    PrintLine(packets::PrintLine),
+    /// 2.2.7
+    PrintTextBlock(packets::PrintTextBlock),
+    // 2.2.8 produces no message.
+    /// 2.2.9
+    CompletionData(packets::CompletionData),
+    /// 2.2.9
+    Abort(packets::Abort),
+}
+
+impl Sequence for Authorization {
+    type Input = packets::Authorization;
+    type Output = AuthorizationResponse;
+
+    fn into_stream<'a, Source>(
+        input: &'a Self::Input,
+        src: &'a mut PacketTransport<Source>,
+    ) -> Pin<Box<dyn Stream<Item = Result<Self::Output>> + Send + 'a>>
+    where
+        Source: AsyncReadExt + AsyncWriteExt + Unpin + Send,
+        Self: 'a,
+    {
+        let s = try_stream! {
+            // 2.1
+            src.write_packet_with_ack(input).await?;
+
+            loop {
+                let packet = src.read_packet().await?;
+                src.write_packet(&packets::Ack {}).await?;
+                match packet {
+                    AuthorizationResponse::CompletionData(_) | AuthorizationResponse::Abort(_) => {
+                        yield packet;
+                        break;
+                    }
+                    _ => yield packet,
+                }
+            }
+        };
+        Box::pin(s)
+    }
+}
+
 /// Read-card sequence as defined under 2.21.
 ///
 /// With this command the PT reads a chip-card/magnet-card and transmits the
@@ -347,28 +406,6 @@ impl Sequence for EndOfDay {
 /// payment-amount) and then, after the sales-process, releases the unused
 /// amount via a [PartialReversal] or Book Total (06 24, not implemented).
 pub struct Reservation;
-
-/// Response to [packets::Reservation] message, as defined under 2.8.
-///
-/// The response is the same as for Authorization, defined in chapter 2.1.
-#[derive(Debug, ZvtEnum)]
-#[allow(clippy::large_enum_variant)]
-pub enum AuthorizationResponse {
-    /// 2.2.4
-    IntermediateStatusInformation(packets::IntermediateStatusInformation),
-    // 2.2.5 produces no message.
-    /// 2.2.6
-    StatusInformation(packets::StatusInformation),
-    /// 2.2.7
-    PrintLine(packets::PrintLine),
-    /// 2.2.7
-    PrintTextBlock(packets::PrintTextBlock),
-    // 2.2.8 produces no message.
-    /// 2.2.9
-    CompletionData(packets::CompletionData),
-    /// 2.2.9
-    Abort(packets::Abort),
-}
 
 impl Sequence for Reservation {
     type Input = packets::Reservation;
