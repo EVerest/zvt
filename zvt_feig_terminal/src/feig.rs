@@ -139,9 +139,6 @@ pub struct Feig {
 
     /// The last end of day job.
     end_of_day_last_instant: std::time::Instant,
-
-    /// Was the terminal successfully configured
-    successfully_configured: bool,
 }
 
 impl Feig {
@@ -155,16 +152,11 @@ impl Feig {
             transactions_max_num,
             end_of_day_max_interval,
             end_of_day_last_instant: std::time::Instant::now(),
-            successfully_configured: false,
         };
 
-        // Ignore the errors from configure beyond setting the flag
-        // (call fails if e.x. the terminal id is invalid)
-        let mut successfully_configured = false;
-        if let Ok(_) = this.configure().await {
-            successfully_configured = true;
-        }
-        this.successfully_configured = successfully_configured;
+        // Ignore the errors from configure. (call fails if e.x. the terminal id
+        // is invalid)
+        let _unused = this.configure().await;
         Ok(this)
     }
 
@@ -176,9 +168,6 @@ impl Feig {
             config
         };
         self.socket = TcpStream::new(config)?;
-        // Reset this to trigger a network call inside the `configure` call
-        // below.
-        self.successfully_configured = false;
         // This checks if the new connection is sound.
         self.configure().await
     }
@@ -433,22 +422,86 @@ impl Feig {
 
     /// Initializes the connection.
     ///
-    /// We're doing the following
-    /// * Set the terminal id if required.
-    /// * Initialize the terminal.
-    /// * Run end-of-day job.
+    /// We're doing the following based on the terminal status code:
+    /// * If PtReady - return
+    /// * If ReconciliationRequired - run end-of-day
+    /// * If InitialisationRequired or DiagnosisRequired - set terminal id and run emv diagnostics
     pub async fn configure(&mut self) -> Result<()> {
-        if self.successfully_configured {
-            return Ok(());
+        // Get the status inquiry so we can reason on the terminal_status_code.
+        let password = self.socket.config().feig_config.password;
+        let request = packets::StatusEnquiry {
+            password: Some(password),
+            service_byte: None,
+            tlv: None,
+        };
+
+        let mut error = zvt::ZVTError::IncompleteData.into();
+        let mut terminal_status_code = None;
+        let mut stream = sequences::StatusEnquiry::into_stream(request, &mut self.socket);
+
+        while let Some(response) = stream.next().await {
+            let response = match response {
+                Ok(response) => response,
+                Err(err) => {
+                    error = err;
+                    continue;
+                }
+            };
+            match response {
+                sequences::StatusEnquiryResponse::CompletionData(completion_data) => {
+                    terminal_status_code = Some(completion_data.terminal_status_code);
+                }
+                other => {
+                    log::debug!("{other:#?}");
+                }
+            }
         }
+        drop(stream);
+
+        let Some(terminal_status_code) = terminal_status_code else {
+            return Err(error);
+        };
+
+        let status =
+            constants::TerminalStatusCode::from_u8(terminal_status_code).ok_or(anyhow!(
+                "Unknown terminal status code: 0x{:02x}",
+                terminal_status_code
+            ))?;
+
+        match status {
+            constants::TerminalStatusCode::PtReady => {
+                log::debug!("Terminal is ready");
+            }
+            constants::TerminalStatusCode::ReconciliationRequired => {
+                info!("Reconciliation required, running end of day");
+                self.end_of_day().await?;
+            }
+            constants::TerminalStatusCode::InitialisationRequired
+            | constants::TerminalStatusCode::DiagnosisRequired
+            | constants::TerminalStatusCode::TerminalActivationRequired => {
+                info!("Initialization or diagnosis required");
+                self.set_terminal_id().await?;
+                self.run_diagnosis(packets::DiagnosisType::EmvConfiguration)
+                    .await?;
+                self.initialize().await?;
+            }
+            _ => {
+                bail!("Unexpected terminal status: {}", status)
+            }
+        }
+
+        // If we've an outdated tid, we would actually still receive PtReady or
+        // ReconciliationRequired. After running potential end of day jobs on
+        // what ever tid is currently stored in the payment terminal we now
+        // force the payment terminal to have our desired tid. If the tid didn't
+        // change this call returns right away.
         let tid_changed = self.set_terminal_id().await?;
         if tid_changed {
+            info!("Tid change detected");
             self.run_diagnosis(packets::DiagnosisType::EmvConfiguration)
                 .await?;
+            self.initialize().await?;
         }
-        self.initialize().await?;
-        self.successfully_configured = true;
-
         Ok(())
     }
 
@@ -588,6 +641,7 @@ impl Feig {
 
         let mut error = zvt::ZVTError::IncompleteData.into();
         let mut receipt_no = None;
+        let mut abort_error = None;
         let mut stream = sequences::Reservation::into_stream(request, &mut self.socket);
         while let Some(response) = stream.next().await {
             let response = match response {
@@ -601,8 +655,7 @@ impl Feig {
                 sequences::AuthorizationResponse::Abort(data) => {
                     let err = zvt::constants::ErrorMessages::from_u8(data.error)
                         .ok_or(anyhow!("Unknown error code: 0x{:X}", data.error))?;
-
-                    bail!(err);
+                    abort_error = Some(err);
                 }
                 sequences::AuthorizationResponse::StatusInformation(data) => {
                     // Only overwrite the receipt_no if it is contained in the
@@ -613,6 +666,22 @@ impl Feig {
                 }
                 _ => {}
             }
+        }
+        drop(stream);
+
+        // Handle TidNotActivated error specifically
+        #[cfg(feature = "with_lavego_error_codes")]
+        if let Some(constants::ErrorMessages::TidNotActivated) = abort_error {
+            info!("TID not activated, setting terminal ID");
+            self.set_terminal_id().await?;
+            self.run_diagnosis(packets::DiagnosisType::EmvConfiguration)
+                .await?;
+            self.initialize().await?;
+        }
+
+        // Handle other abort errors
+        if let Some(err) = abort_error {
+            bail!(err);
         }
 
         match receipt_no {

@@ -7,7 +7,7 @@ use thiserror::Error;
 pub enum ErrorMessages {
     #[cfg(feature = "with_lavego_error_codes")]
     #[error("declined, referred voice authorization possible")]
-    Declined = 0x02,
+    DeclinedReferredVoiceAuthorizationPossible = 0x02,
     #[cfg(feature = "with_lavego_error_codes")]
     #[error("declined")]
     Declined = 0x05,
@@ -189,4 +189,54 @@ pub enum ErrorMessages {
     RegisterUnknown = 0xfe,
     #[error("system error (= other/unknown error), See TLV tags 1F16 and 1F17")]
     SystemError = 0xff,
+}
+
+/// Messages as defined under chapter 11.
+#[derive(Debug, PartialEq, FromPrimitive, Clone, Copy, Error)]
+#[repr(u8)]
+pub enum TerminalStatusCode {
+    #[error("PT ready")]
+    PtReady = 0x00,
+    #[error("Initialisation required")]
+    InitialisationRequired = 0x51,
+    #[error("Date/time incorrect")]
+    DateTimeIncorrect = 0x62,
+    #[error("Please wait (e.g. software-update still running)")]
+    PleaseWait = 0x9c,
+    #[error("Partial issue of goods")]
+    PartialIssueOfGoods = 0x9d,
+    #[error("Memory full")]
+    MemoryFull = 0xb1,
+    #[error("Merchant-journal full")]
+    MerchantJournalFull = 0xb2,
+    #[error("Voltage supply too low (external power supply)")]
+    VoltageSupplyTooLow = 0xbf,
+    #[error("Card locking mechanism defect")]
+    CardLockingMechanismDefect = 0xc0,
+    #[error("Merchant card locked")]
+    MerchantCardLocked = 0xc1,
+    #[error("Diagnosis required")]
+    DiagnosisRequired = 0xc2,
+    #[error("Card-profile invalid. New card-profiles must be loaded")]
+    CardProfileInvalid = 0xc4,
+    #[error("Printer not ready")]
+    PrinterNotReady = 0xcc,
+    #[error("Card inserted")]
+    CardInserted = 0xdc,
+    #[error("Out-of-order")]
+    OutOfOrder = 0xdf,
+    #[error("Remote-maintenance activated")]
+    RemoteMaintenanceActivated = 0xe0,
+    #[error("Card not completely removed")]
+    CardNotCompletelyRemoved = 0xe1,
+    #[error("Card-reader does not answer / card-reader defective")]
+    CardReaderDoesNotAnswer = 0xe2,
+    #[error("Shutter closed")]
+    ShutterClosed = 0xe3,
+    #[error("Terminal activation required")]
+    TerminalActivationRequired = 0xe4,
+    #[error("Reconciliation required")]
+    ReconciliationRequired = 0xf0,
+    #[error("OPT-data not available (= OPT-Personalisation required)")]
+    OptDataNotAvailable = 0xf6,
 }

@@ -591,8 +591,9 @@ pub enum StatusEnquiryResponse {
     PrintLine(packets::PrintLine),
     /// 2.55.4
     PrintTextBlock(packets::PrintTextBlock),
-    /// 2.55.5
-    CompletionData(packets::CompletionData),
+    /// 2.55.5. The possible tags in the status enquiry correspond to the
+    /// ReceiptPrintoutCompletion.
+    CompletionData(packets::ReceiptPrintoutCompletion),
 }
 
 impl Sequence for StatusEnquiry {
