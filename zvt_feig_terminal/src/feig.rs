@@ -641,7 +641,6 @@ impl Feig {
 
         let mut error = zvt::ZVTError::IncompleteData.into();
         let mut receipt_no = None;
-        let mut abort_error = None;
         let mut stream = sequences::Reservation::into_stream(request, &mut self.socket);
         while let Some(response) = stream.next().await {
             let response = match response {
@@ -655,7 +654,8 @@ impl Feig {
                 sequences::AuthorizationResponse::Abort(data) => {
                     let err = zvt::constants::ErrorMessages::from_u8(data.error)
                         .ok_or(anyhow!("Unknown error code: 0x{:X}", data.error))?;
-                    abort_error = Some(err);
+
+                    bail!(err);
                 }
                 sequences::AuthorizationResponse::StatusInformation(data) => {
                     // Only overwrite the receipt_no if it is contained in the
@@ -666,22 +666,6 @@ impl Feig {
                 }
                 _ => {}
             }
-        }
-        drop(stream);
-
-        // Handle TidNotActivated error specifically
-        #[cfg(feature = "with_lavego_error_codes")]
-        if let Some(constants::ErrorMessages::TidNotActivated) = abort_error {
-            info!("TID not activated, setting terminal ID");
-            self.set_terminal_id().await?;
-            self.run_diagnosis(packets::DiagnosisType::EmvConfiguration)
-                .await?;
-            self.initialize().await?;
-        }
-
-        // Handle other abort errors
-        if let Some(err) = abort_error {
-            bail!(err);
         }
 
         match receipt_no {

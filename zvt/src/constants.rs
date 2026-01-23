@@ -22,6 +22,8 @@ pub enum ErrorMessages {
     PinEntryRequiredx33 = 0x33,
     #[cfg(feature = "with_lavego_error_codes")]
     #[error("TID not activated")]
+    /// Note: This does **not** mean that we have to activate the tid on the
+    /// payment terminal side.
     TidNotActivated = 0x3a,
     #[cfg(feature = "with_lavego_error_codes")]
     #[error("PIN entry required")]
