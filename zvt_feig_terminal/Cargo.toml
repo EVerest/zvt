@@ -15,7 +15,6 @@ tokio = { version = "1.47.0", features = ["macros", "rt-multi-thread", "net", "s
 log = "0.4.20"
 async-trait = "0.1.73"
 env_logger = "0.10.0"
-tonic = "0.8.3"
 tokio-stream = "0.1.14"
 serde = { version = "1.0.188", features = ["derive"] }
 serde_json = "1.0.105"
