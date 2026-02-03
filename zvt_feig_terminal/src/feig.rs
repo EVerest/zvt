@@ -420,13 +420,7 @@ impl Feig {
         Err(error)
     }
 
-    /// Initializes the connection.
-    ///
-    /// We're doing the following based on the terminal status code:
-    /// * If PtReady - return
-    /// * If ReconciliationRequired - run end-of-day
-    /// * If InitialisationRequired or DiagnosisRequired - set terminal id and run emv diagnostics
-    pub async fn configure(&mut self) -> Result<()> {
+    async fn status_enquiry(&mut self) -> Result<constants::TerminalStatusCode> {
         // Get the status inquiry so we can reason on the terminal_status_code.
         let password = self.socket.config().feig_config.password;
         let request = packets::StatusEnquiry {
@@ -462,12 +456,22 @@ impl Feig {
             return Err(error);
         };
 
-        let status =
-            constants::TerminalStatusCode::from_u8(terminal_status_code).ok_or(anyhow!(
-                "Unknown terminal status code: 0x{:02x}",
-                terminal_status_code
-            ))?;
+        constants::TerminalStatusCode::from_u8(terminal_status_code).ok_or(anyhow!(
+            "Unknown terminal status code: 0x{:02x}",
+            terminal_status_code
+        ))
+    }
 
+    /// Initializes the connection.
+    ///
+    /// We're doing the following based on the terminal status code:
+    /// * If PtReady - return
+    /// * If ReconciliationRequired - run end-of-day
+    /// * If InitialisationRequired, DiagnosisRequired or TerminalActivationRequired
+    ///  - set terminal id, run emv diagnostics and initialize the terminal.
+    pub async fn configure(&mut self) -> Result<()> {
+        let status = self.status_enquiry().await?;
+        let mut force_init = false;
         match status {
             constants::TerminalStatusCode::PtReady => {
                 log::debug!("Terminal is ready");
@@ -480,13 +484,10 @@ impl Feig {
             | constants::TerminalStatusCode::DiagnosisRequired
             | constants::TerminalStatusCode::TerminalActivationRequired => {
                 info!("Initialization or diagnosis required");
-                self.set_terminal_id().await?;
-                self.run_diagnosis(packets::DiagnosisType::EmvConfiguration)
-                    .await?;
-                self.initialize().await?;
+                force_init = true;
             }
             _ => {
-                bail!("Unexpected terminal status: {}", status)
+                warn!("Unexpected terminal status: {status}")
             }
         }
 
@@ -496,8 +497,8 @@ impl Feig {
         // force the payment terminal to have our desired tid. If the tid didn't
         // change this call returns right away.
         let tid_changed = self.set_terminal_id().await?;
-        if tid_changed {
-            info!("Tid change detected");
+        if tid_changed || force_init {
+            info!("tid_changed: {tid_changed} and force_init {force_init}");
             self.run_diagnosis(packets::DiagnosisType::EmvConfiguration)
                 .await?;
             self.initialize().await?;

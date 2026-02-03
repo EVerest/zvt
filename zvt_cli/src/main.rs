@@ -35,13 +35,15 @@ enum StatusType {
 }
 
 impl FromStr for StatusType {
-    type Err = String;
+    type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "feig" => Ok(StatusType::Feig),
             "zvt" => Ok(StatusType::Zvt),
-            _ => Err(format!("'{}' is not a valid StatusType (feig | zvt)", s)),
+            _ => Err(anyhow::anyhow!(
+                "'{s}' is not a valid StatusType (feig | zvt)"
+            )),
         }
     }
 }
@@ -297,6 +299,14 @@ async fn status(
                 service_byte: service_byte,
                 tlv: None,
             };
+
+            // See table 12 in the definition. We cannot parse this reqeust
+            // correctly.
+            if let Some(sb) = service_byte {
+                if (sb & 0x02) == 0 {
+                    log::warn!("The 'Do send SW-Version' is not supported. The output will be not correctly parsed.");
+                }
+            }
 
             let mut stream = sequences::StatusEnquiry::into_stream(&request, socket);
             while let Some(response) = stream.next().await {
