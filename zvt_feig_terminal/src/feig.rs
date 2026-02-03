@@ -213,7 +213,7 @@ impl Feig {
 
         // Set the terminal id if required.
         if config.terminal_id == system_info.terminal_id {
-            info!("Terminal id already up-to-date");
+            log::debug!("Terminal id already up-to-date");
             return Ok(false);
         }
 
