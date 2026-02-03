@@ -14,14 +14,6 @@ pub struct SetTimeAndDate {
 }
 
 #[derive(Debug, Default, PartialEq, Zvt)]
-pub struct NumAndTotal {
-    pub num: u8,
-
-    #[zvt_bmp(length = length::Fixed<6>, encoding = encoding::Bcd)]
-    pub total: usize,
-}
-
-#[derive(Debug, Default, PartialEq, Zvt)]
 pub struct SingleAmounts {
     #[zvt_bmp(length = length::Fixed<2>, encoding = encoding::Bcd)]
     pub receipt_no_start: usize,
@@ -29,13 +21,40 @@ pub struct SingleAmounts {
     #[zvt_bmp(length = length::Fixed<2>, encoding = encoding::Bcd)]
     pub receipt_no_end: usize,
 
-    pub girocard: NumAndTotal,
-    pub jcb: NumAndTotal,
-    pub eurocard: NumAndTotal,
-    pub amex: NumAndTotal,
-    pub visa: NumAndTotal,
-    pub diners: NumAndTotal,
-    pub others: NumAndTotal,
+    pub girocard_num: u8,
+
+    #[zvt_bmp(length = length::Fixed<6>, encoding = encoding::Bcd)]
+    pub girocard_total: usize,
+
+    pub jcb_num: u8,
+
+    #[zvt_bmp(length = length::Fixed<6>, encoding = encoding::Bcd)]
+    pub jcb_total: usize,
+
+    pub eurocard_num: u8,
+
+    #[zvt_bmp(length = length::Fixed<6>, encoding = encoding::Bcd)]
+    pub eurocard_total: usize,
+
+    pub amex_num: u8,
+
+    #[zvt_bmp(length = length::Fixed<6>, encoding = encoding::Bcd)]
+    pub amex_total: usize,
+
+    pub visa_num: u8,
+
+    #[zvt_bmp(length = length::Fixed<6>, encoding = encoding::Bcd)]
+    pub visa_total: usize,
+
+    pub diners_num: u8,
+
+    #[zvt_bmp(length = length::Fixed<6>, encoding = encoding::Bcd)]
+    pub diners_total: usize,
+
+    pub others_num: u8,
+
+    #[zvt_bmp(length = length::Fixed<6>, encoding = encoding::Bcd)]
+    pub others_total: usize,
 }
 
 #[derive(Debug, Default, PartialEq, Zvt)]
@@ -557,7 +576,8 @@ pub mod tests {
             single_amounts: Some(SingleAmounts {
                 receipt_no_start: 233,
                 receipt_no_end: 234,
-                eurocard: NumAndTotal { num: 2, total: 958 },
+                eurocard_num: 2,
+                eurocard_total: 958,
                 ..SingleAmounts::default()
             }),
             ..StatusInformation::default()
