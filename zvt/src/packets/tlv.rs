@@ -110,6 +110,18 @@ pub struct PreAuthData {
     pub bmp_data: Option<Bmp60>,
 }
 
+#[derive(Debug, Default, PartialEq, Zvt)]
+pub struct AuthorizationData {
+    #[zvt_tlv(tag = 0x41, encoding = encoding::Hex)]
+    pub card_type: Option<String>,
+
+    #[zvt_tlv(tag = 0x43, encoding = encoding::Hex)]
+    pub application_id: Option<String>,
+
+    #[zvt_tlv(tag = 0x1F15)]
+    pub card_reading_control: Option<u8>,
+}
+
 #[derive(Debug, PartialEq, Zvt)]
 pub struct Diagnosis {
     #[zvt_tlv(tag = 0x1b)]
