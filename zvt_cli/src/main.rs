@@ -3,6 +3,7 @@ use argh::FromArgs;
 use env_logger::{Builder, Env};
 use std::io::Write;
 use std::net::Ipv4Addr;
+use std::str::FromStr;
 use tokio::net::TcpStream;
 use tokio_stream::StreamExt;
 use zvt::sequences::Sequence;
@@ -27,10 +28,38 @@ enum SubCommands {
     ChangeHostConfiguration(ChangeHostConfigurationArgs),
 }
 
+#[derive(Debug, PartialEq)]
+enum StatusType {
+    Feig,
+    Zvt,
+}
+
+impl FromStr for StatusType {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "feig" => Ok(StatusType::Feig),
+            "zvt" => Ok(StatusType::Zvt),
+            _ => Err(anyhow::anyhow!(
+                "'{s}' is not a valid StatusType (feig | zvt)"
+            )),
+        }
+    }
+}
+
 #[derive(FromArgs, PartialEq, Debug)]
-/// Query the cVEND status from the terminal and print to stdout.
+/// Query the status.
 #[argh(subcommand, name = "status")]
-struct StatusArgs {}
+struct StatusArgs {
+    /// which type of status to use (feig | zvt)
+    #[argh(option, default = "StatusType::Zvt")]
+    r#type: StatusType,
+
+    /// in case of zvt - which service byte to use. See section 2.55.1 for more details.
+    #[argh(option)]
+    service_byte: Option<u8>,
+}
 
 #[derive(FromArgs, PartialEq, Debug)]
 /// Factory resets the terminal.
@@ -240,18 +269,49 @@ fn init_logger() {
         .init();
 }
 
-async fn status(socket: &mut PacketTransport) -> Result<()> {
-    // Check the current version of the software
-    let request = feig::packets::CVendFunctions {
-        password: None,
-        instr: feig::constants::CVendFunctions::SystemsInfo as u16,
-    };
-    let mut stream = feig::sequences::GetSystemInfo::into_stream(&request, socket);
-    while let Some(response) = stream.next().await {
-        use feig::sequences::GetSystemInfoResponse::*;
-        match response? {
-            CVendFunctionsEnhancedSystemInformationCompletion(data) => log::info!("{data:#?}"),
-            Abort(_) => bail!("Failed to get system info. Received Abort."),
+async fn status(
+    socket: &mut PacketTransport,
+    password: usize,
+    status_type: StatusType,
+    service_byte: Option<u8>,
+) -> Result<()> {
+    match status_type {
+        StatusType::Feig => {
+            // Check the current version of the software
+            let request = feig::packets::CVendFunctions {
+                password: None,
+                instr: feig::constants::CVendFunctions::SystemsInfo as u16,
+            };
+            let mut stream = feig::sequences::GetSystemInfo::into_stream(&request, socket);
+            while let Some(response) = stream.next().await {
+                use feig::sequences::GetSystemInfoResponse::*;
+                match response? {
+                    CVendFunctionsEnhancedSystemInformationCompletion(data) => {
+                        log::info!("{data:#?}")
+                    }
+                    Abort(_) => bail!("Failed to get system info. Received Abort."),
+                }
+            }
+        }
+        StatusType::Zvt => {
+            let request = packets::StatusEnquiry {
+                password: Some(password),
+                service_byte: service_byte,
+                tlv: None,
+            };
+
+            // See table 12 in the definition. We cannot parse this reqeust
+            // correctly.
+            if let Some(sb) = service_byte {
+                if (sb & 0x02) == 0 {
+                    log::warn!("The 'Do send SW-Version' is not supported. The output will be not correctly parsed.");
+                }
+            }
+
+            let mut stream = sequences::StatusEnquiry::into_stream(&request, socket);
+            while let Some(response) = stream.next().await {
+                log::info!("{response:#?}");
+            }
         }
     }
     Ok(())
@@ -542,7 +602,9 @@ async fn main() -> Result<()> {
     };
 
     match args.command {
-        SubCommands::Status(_) => status(&mut socket).await?,
+        SubCommands::Status(a) => {
+            status(&mut socket, args.password, a.r#type, a.service_byte).await?
+        }
         SubCommands::FactoryReset(_) => factory_reset(&mut socket, args.password).await?,
         SubCommands::Registration(a) => registration(&mut socket, args.password, &a).await?,
         SubCommands::SetTerminalId(a) => set_terminal_id(&mut socket, args.password, &a).await?,

@@ -9,6 +9,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo build --all
       - run: cargo build --all --examples
+      - run: cargo build --all -F with_lavego_error_codes
   test:
     name: cargo test
     runs-on: ubuntu-latest
