@@ -1286,7 +1286,7 @@ dependencies = [
 
 [[package]]
 name = "zvt"
-version = "0.1.1"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -1307,7 +1307,7 @@ dependencies = [
 
 [[package]]
 name = "zvt_builder"
-version = "0.1.1"
+version = "1.0.0"
 dependencies = [
  "chrono",
  "hex",
@@ -1319,7 +1319,7 @@ dependencies = [
 
 [[package]]
 name = "zvt_cli"
-version = "0.1.1"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "argh",
@@ -1334,7 +1334,7 @@ dependencies = [
 
 [[package]]
 name = "zvt_derive"
-version = "0.1.1"
+version = "1.0.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1343,7 +1343,7 @@ dependencies = [
 
 [[package]]
 name = "zvt_feig_terminal"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "async-stream",

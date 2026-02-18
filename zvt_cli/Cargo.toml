@@ -23,4 +23,4 @@ serde = { version = "1.0.185", features = ["derive"] }
 serde_json = "1.0.105"
 tokio = { version = "1.29.1", features = ["net", "io-util", "rt-multi-thread", "macros"] }
 tokio-stream = "0.1.14"
-zvt = { version = "0.1.0", path = "../zvt" }
+zvt = { version = "1.0.0", path = "../zvt" }
