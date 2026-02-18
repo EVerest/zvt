@@ -30,5 +30,5 @@ pretty-hex = "0.4.0"
 thiserror = "2.0.17"
 tokio = { version = "1.29.1", features = ["net", "io-util", "rt-multi-thread", "macros"] }
 tokio-stream = "0.1.14"
-zvt_builder = { version = "0.1.0", path = "../zvt_builder" }
-zvt_derive = { version = "0.1.0", path = "../zvt_derive" }
+zvt_builder = { version = "1.0.0", path = "../zvt_builder" }
+zvt_derive = { version = "1.0.0", path = "../zvt_derive" }

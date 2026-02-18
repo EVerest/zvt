@@ -17,4 +17,4 @@ hex = "0.4.3"
 log = "0.4.20"
 thiserror = "2.0.17"
 yore = "1.0.2"
-zvt_derive = { version = "0.1.0", path = "../zvt_derive" }
+zvt_derive = { version = "1.0.0", path = "../zvt_derive" }
