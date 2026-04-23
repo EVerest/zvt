@@ -26,6 +26,7 @@ enum SubCommands {
     ReadCard(ReadCardArgs),
     Reservation(ReservationArgs),
     PartialReversal(PartialReversalArgs),
+    GetPending(GetPendingArgs),
     ChangeHostConfiguration(ChangeHostConfigurationArgs),
 }
 
@@ -233,6 +234,11 @@ struct PartialReversalArgs {
     #[argh(option)]
     bmp_data: Option<String>,
 }
+
+#[derive(FromArgs, PartialEq, Debug)]
+/// Lists the current pending pre-authorized transaction.
+#[argh(subcommand, name = "get_pending")]
+struct GetPendingArgs {}
 
 #[derive(FromArgs, PartialEq, Debug)]
 /// Changes the Host the payment terminal connects to.
@@ -605,6 +611,40 @@ async fn partial_reversal(socket: &mut PacketTransport, args: PartialReversalArg
     Ok(())
 }
 
+async fn get_pending(socket: &mut PacketTransport) -> Result<Option<usize>> {
+    let request = packets::PartialReversal {
+        receipt_no: Some(0xFFFF),
+        ..packets::PartialReversal::default()
+    };
+
+    let mut error = zvt::ZVTError::IncompleteData.into();
+    let mut stream = sequences::PartialReversal::into_stream(&request, socket);
+    while let Some(response) = stream.next().await {
+        let response = match response {
+            Ok(response) => response,
+            Err(err) => {
+                error = err;
+                continue;
+            }
+        };
+        match response {
+            sequences::PartialReversalResponse::PartialReversalAbort(data) => {
+                // The 0xFFFF means no pending transactions.
+                let Some(receipt_no) = data.receipt_no else {
+                    return Ok(None);
+                };
+                if receipt_no == 0xFFFF {
+                    return Ok(None);
+                }
+                log::info!("get_pending: found open transaction, receipt_no={receipt_no}");
+                return Ok(Some(receipt_no));
+            }
+            _ => bail!("Unexpected packet"),
+        }
+    }
+    Err(error)
+}
+
 async fn change_host_config(
     socket: &mut PacketTransport,
     password: usize,
@@ -659,6 +699,7 @@ async fn main() -> Result<()> {
         SubCommands::ReadCard(a) => read_card(&mut socket, &a).await?,
         SubCommands::Reservation(a) => reservation(&mut socket, a).await?,
         SubCommands::PartialReversal(a) => partial_reversal(&mut socket, a).await?,
+        SubCommands::GetPending(_) => { get_pending(&mut socket).await?; },
         SubCommands::ChangeHostConfiguration(a) => {
             change_host_config(&mut socket, args.password, a).await?
         }
