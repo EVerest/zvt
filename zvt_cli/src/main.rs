@@ -26,6 +26,7 @@ enum SubCommands {
     ReadCard(ReadCardArgs),
     Reservation(ReservationArgs),
     PartialReversal(PartialReversalArgs),
+    CancelPending(CancelPendingArgs),
     GetPending(GetPendingArgs),
     ChangeHostConfiguration(ChangeHostConfigurationArgs),
 }
@@ -239,6 +240,19 @@ struct PartialReversalArgs {
 /// Lists the current pending pre-authorized transaction.
 #[argh(subcommand, name = "get_pending")]
 struct GetPendingArgs {}
+
+#[derive(FromArgs, PartialEq, Debug)]
+/// Cancels the current pending pre-authorized transaction.
+#[argh(subcommand, name = "cancel_pending")]
+struct CancelPendingArgs {
+    /// currency code. The default is EUR.
+    #[argh(option, default = "978")]
+    currency_code: usize,
+
+    /// see reservation.
+    #[argh(option, default = "64")]
+    payment_type: u8,
+}
 
 #[derive(FromArgs, PartialEq, Debug)]
 /// Changes the Host the payment terminal connects to.
@@ -645,6 +659,56 @@ async fn get_pending(socket: &mut PacketTransport) -> Result<Option<usize>> {
     Err(error)
 }
 
+
+async fn cancel_transaction_by_receipt_no(
+    socket: &mut PacketTransport,
+    receipt_no: usize,
+    payment_type: u8,
+    currency: usize,
+) -> Result<()> {
+    let request = packets::PreAuthReversal {
+        payment_type: Some(payment_type),
+        currency: Some(currency),
+        receipt_no: Some(receipt_no),
+    };
+
+    let mut error = zvt::ZVTError::IncompleteData.into();
+    let mut stream = sequences::PreAuthReversal::into_stream(&request, socket);
+    while let Some(response) = stream.next().await {
+        let response = match response {
+            Ok(response) => response,
+            Err(err) => {
+                error = err;
+                continue;
+            }
+        };
+        match response {
+            sequences::PartialReversalResponse::CompletionData(_) => return Ok(()),
+            sequences::PartialReversalResponse::PartialReversalAbort(data) => {
+                bail!(zvt::ZVTError::Aborted(data.error))
+            }
+            _ => {}
+        }
+    }
+    Err(error)
+}
+
+async fn cancel_pending(socket: &mut PacketTransport, args: CancelPendingArgs) -> Result<()> {
+    let Some(receipt_no) = get_pending(socket).await? else {
+        log::debug!("cancel_pending: no open transactions to cancel");
+        return Ok(());
+    };
+
+    log::debug!(
+        "cancel_pending: cancelling receipt_no={receipt_no} payment_type={:?} currency={:?}",
+        args.payment_type,
+        args.currency_code,
+    );
+    cancel_transaction_by_receipt_no(socket, receipt_no, args.payment_type, args.currency_code).await?;
+    log::debug!("cancel_pending: successfully cancelled receipt_no={receipt_no}");
+    Ok(())
+}
+
 async fn change_host_config(
     socket: &mut PacketTransport,
     password: usize,
@@ -699,6 +763,7 @@ async fn main() -> Result<()> {
         SubCommands::ReadCard(a) => read_card(&mut socket, &a).await?,
         SubCommands::Reservation(a) => reservation(&mut socket, a).await?,
         SubCommands::PartialReversal(a) => partial_reversal(&mut socket, a).await?,
+        SubCommands::CancelPending(a) => cancel_pending(&mut socket, a).await?,
         SubCommands::GetPending(_) => { get_pending(&mut socket).await?; },
         SubCommands::ChangeHostConfiguration(a) => {
             change_host_config(&mut socket, args.password, a).await?
