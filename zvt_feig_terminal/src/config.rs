@@ -82,6 +82,7 @@ impl Default for FeigConfig {
 fn iso_4217(code: &str) -> Result<usize> {
     match code.to_uppercase().as_str() {
         // Keep the list sorted by the numeric value.
+        "DKK" => Ok(208),
         "SEK" => Ok(752),
         "GBP" => Ok(826),
         "EUR" => Ok(978),
