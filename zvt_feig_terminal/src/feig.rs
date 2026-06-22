@@ -141,6 +141,22 @@ pub struct Feig {
     end_of_day_last_instant: std::time::Instant,
 }
 
+/// Checks that the connected terminal's serial matches the expected one.
+///
+/// The serial is verified at connect time, but the peer behind an established
+/// connection can change, so we re-check before destructive writes. The
+/// comparison is case-insensitive to match [crate::stream].
+fn ensure_device_id(expected_serial: &str, received_serial: &str) -> Result<()> {
+    ensure!(
+        expected_serial.to_lowercase() == received_serial.to_lowercase(),
+        Error::IncorrectDeviceId {
+            expected: expected_serial.to_string(),
+            received: received_serial.to_string(),
+        }
+    );
+    Ok(())
+}
+
 impl Feig {
     pub async fn new(config: Config) -> Result<Self> {
         let transactions_max_num = config.transactions_max_num;
@@ -207,8 +223,10 @@ impl Feig {
     ///
     /// Returns true if a new TID was set, and false if the requested TID is
     /// already set to the terminal
-    async fn set_terminal_id(&mut self) -> Result<bool> {
-        let system_info = self.get_system_info().await?;
+    async fn set_terminal_id(
+        &mut self,
+        system_info: &feig::packets::CVendFunctionsEnhancedSystemInformationCompletion,
+    ) -> Result<bool> {
         let config = self.socket.config().clone();
 
         // Set the terminal id if required.
@@ -470,6 +488,11 @@ impl Feig {
     /// * If InitialisationRequired, DiagnosisRequired or TerminalActivationRequired
     ///  - set terminal id, run emv diagnostics and initialize the terminal.
     pub async fn configure(&mut self) -> Result<()> {
+        // Verify we're talking to our own terminal before running any
+        // (potentially destructive) operation below.
+        let system_info = self.get_system_info().await?;
+        ensure_device_id(&self.socket.config().feig_serial, &system_info.device_id)?;
+
         let status = self.status_enquiry().await?;
         let mut force_init = false;
         match status {
@@ -496,7 +519,7 @@ impl Feig {
         // what ever tid is currently stored in the payment terminal we now
         // force the payment terminal to have our desired tid. If the tid didn't
         // change this call returns right away.
-        let tid_changed = self.set_terminal_id().await?;
+        let tid_changed = self.set_terminal_id(&system_info).await?;
         if tid_changed || force_init {
             info!("tid_changed: {tid_changed} and force_init {force_init}");
             self.run_diagnosis(packets::DiagnosisType::EmvConfiguration)
@@ -834,6 +857,10 @@ impl Feig {
     pub async fn update_firmware(&mut self, payload_dir: &Path, force: bool) -> Result<()> {
         // Check the current version of the software
         let system_info = self.get_system_info().await?;
+
+        // Don't flash firmware onto a terminal that isn't ours.
+        ensure_device_id(&self.socket.config().feig_serial, &system_info.device_id)?;
+
         let current_version = system_info.sw_version;
         info!("Current software version: {}", current_version);
 
@@ -882,5 +909,32 @@ impl Feig {
         info!("Updated the firmware");
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn ensure_device_id_accepts_matching_serial() {
+        assert!(ensure_device_id("17FE5C90", "17FE5C90").is_ok());
+    }
+
+    #[test]
+    fn ensure_device_id_is_case_insensitive() {
+        assert!(ensure_device_id("17fe5c90", "17FE5C90").is_ok());
+    }
+
+    #[test]
+    fn ensure_device_id_rejects_mismatching_serial() {
+        let err = ensure_device_id("17FE5C90", "17FD1E3C").unwrap_err();
+        match err.downcast_ref::<Error>() {
+            Some(Error::IncorrectDeviceId { expected, received }) => {
+                assert_eq!(expected, "17FE5C90");
+                assert_eq!(received, "17FD1E3C");
+            }
+            other => panic!("expected IncorrectDeviceId, got {other:?}"),
+        }
     }
 }

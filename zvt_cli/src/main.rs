@@ -378,10 +378,7 @@ async fn registration(
     Ok(())
 }
 
-async fn authorization(
-    socket: &mut PacketTransport,
-    args: &AuthorizationArgs,
-) -> Result<()> {
+async fn authorization(socket: &mut PacketTransport, args: &AuthorizationArgs) -> Result<()> {
     let request = packets::Authorization {
         amount: Some(args.amount),
         currency: Some(args.currency_code),
@@ -699,7 +696,9 @@ async fn main() -> Result<()> {
         SubCommands::ReadCard(a) => read_card(&mut socket, &a).await?,
         SubCommands::Reservation(a) => reservation(&mut socket, a).await?,
         SubCommands::PartialReversal(a) => partial_reversal(&mut socket, a).await?,
-        SubCommands::GetPending(_) => { get_pending(&mut socket).await?; },
+        SubCommands::GetPending(_) => {
+            get_pending(&mut socket).await?;
+        }
         SubCommands::ChangeHostConfiguration(a) => {
             change_host_config(&mut socket, args.password, a).await?
         }
