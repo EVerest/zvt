@@ -19,6 +19,6 @@ The [zvt_cli](zvt_cli/src/main.rs) is both a useful swiss army knife to
 interacting with a payment terminal as well as the example on how you use the
 library. 
 
-A useful standalone tool is [`feig_update`](zvt/src/bin/feig_update/main.rs)
+A useful standalone tool is [`feig_update`](zvt_cli/src/bin/feig_update/main.rs)
 which we use in production to update the Firmware of our cVEND plug terminals.
 This will eventually also be folded into `zvt_cli`.
