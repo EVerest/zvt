@@ -473,13 +473,13 @@
           "REPO_MAPPING:rules_rust+,bazel_tools bazel_tools",
           "REPO_MAPPING:rules_rust+,rules_cc rules_cc+",
           "REPO_MAPPING:rules_rust+,rules_rust rules_rust+",
-          "FILE:@@//Cargo.lock 84f99361feff133881240c221ceb5ff4fe351b037ac19cd705b1efb6037f8e2a",
-          "FILE:@@//Cargo.toml 33ba05efdf74b34e261a8e7b4c2e1a8844533035922ea733aaedd17ab9b66ebf",
-          "FILE:@@//zvt/Cargo.toml 7bcf6837baaf5f9990f31646f04ba2101bb45301efb70bd34a5edf2e81736151",
-          "FILE:@@//zvt_builder/Cargo.toml 1e356e09a95506986a77b718548cacd9256dfa0938984d5d7242cdd4d5b1c7aa",
-          "FILE:@@//zvt_cli/Cargo.toml 075010646802b79434aef243cd7cba3a3a36a9e296adc506d89bb75a0352d2f5",
+          "FILE:@@//Cargo.lock a613f79db155cc7daf5e0abca972ae05d94bf2da1057ec97ef09a138d30cbc23",
+          "FILE:@@//Cargo.toml 2762ee0bedfd4c78c4b8237b9e7f702b71bf88ed030b113fcdbed763e72e2719",
+          "FILE:@@//zvt/Cargo.toml 2a8e4f2cac5f65c17f6e6186f70a1a9f08fbfc0b47c2a9cd22c47eca130c7da8",
+          "FILE:@@//zvt_builder/Cargo.toml b5548503deb7b055c260757dd1477fc69303462d2b0a3447701a823016bb432a",
+          "FILE:@@//zvt_cli/Cargo.toml 7e12d579622940e780ed780c6b274df4a01de24d5638a7818ad12b2d295666e9",
           "FILE:@@//zvt_derive/Cargo.toml eef267ca832846e8fd4b1fafbe522910158b6cbe532a7a489087d3dbfd7c629f",
-          "FILE:@@//zvt_feig_terminal/Cargo.toml f445915989ebd9c9f0609541f8d8306517494cd6eee258247fd38cb3502bd399"
+          "FILE:@@//zvt_feig_terminal/Cargo.toml ac6eaf5349bdc3ee48ff37d19dab9c118cca52fb485b1cc81e936732ebebb607"
         ],
         "generatedRepoSpecs": {
           "crate_index": {

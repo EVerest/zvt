@@ -12,5 +12,6 @@ rust_binary(
     name = "feig_update",
     srcs = glob(["src/bin/feig_update/main.rs"]),
     edition = "2021",
+    visibility = ["//visibility:public"],
     deps = all_crate_deps() + ["//zvt"],
 )
