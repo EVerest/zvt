@@ -1,4 +1,4 @@
-use crate::{encoding, Zvt};
+use crate::{encoding, length, Zvt};
 use chrono::NaiveDateTime;
 
 #[derive(Debug, Default, PartialEq, Zvt)]
@@ -93,6 +93,28 @@ pub struct ReservationAbort {
 
     #[zvt_tlv(tag = 0x1f17)]
     pub extended_error_text: Option<String>,
+}
+
+/// A single receipt number inside tag 0x23 (ZVT tag 0x08).
+#[derive(Debug, Default, PartialEq, Zvt)]
+pub struct ReceiptNumber {
+    #[zvt_bmp(length = length::Fixed<2>, encoding = encoding::Bcd)]
+    pub number: usize,
+}
+
+/// Receipt numbers for open pre-authorisations (ZVT tag 0x23 / 0x08).
+///
+/// See ZVT spec chapter 2.10.1 and tag 0x23 in chapter 7.4.
+#[derive(Debug, Default, PartialEq, Zvt)]
+pub struct OpenPreAuthorisations {
+    #[zvt_tlv(tag = 0x08)]
+    pub receipt_numbers: Vec<ReceiptNumber>,
+}
+
+#[derive(Debug, Default, PartialEq, Zvt)]
+pub struct PartialReversalAbortTlv {
+    #[zvt_tlv(tag = 0x23)]
+    pub open_pre_authorisations: Option<OpenPreAuthorisations>,
 }
 
 #[derive(Debug, PartialEq, Zvt)]

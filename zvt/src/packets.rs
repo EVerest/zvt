@@ -287,8 +287,9 @@ pub struct PartialReversalAbort {
 
     #[zvt_bmp(number = 0x87, length = length::Fixed<2>, encoding = PartialReversalReceiptNo)]
     pub receipt_no: Option<usize>,
-    // TODO(ddo) There is also an tlv field which may contain further receipt
-    // numbers. Produce the message to understand how it looks like.
+
+    #[zvt_bmp(number = 0x06, length = length::Tlv)]
+    pub tlv: Option<tlv::PartialReversalAbortTlv>,
 }
 
 /// Pre-Authorization/Reservation.
@@ -877,8 +878,31 @@ pub mod tests {
         let expected = PartialReversalAbort {
             error: 184,
             receipt_no: Some(0xffff),
+            tlv: None,
         };
 
+        assert_eq!(actual, expected);
+        assert_eq!(expected.zvt_serialize(), bytes);
+    }
+
+    #[rstest::rstest]
+    fn test_partial_reversal_abort_with_open_pre_authorisations() {
+        let bytes = get_bytes("partial_reversal_abort_tlv.blob");
+        let expected = PartialReversalAbort {
+            error: 184,
+            receipt_no: Some(0x0123),
+            tlv: Some(tlv::PartialReversalAbortTlv {
+                open_pre_authorisations: Some(tlv::OpenPreAuthorisations {
+                    receipt_numbers: vec![
+                        tlv::ReceiptNumber { number: 0x0123 },
+                        tlv::ReceiptNumber { number: 0x0456 },
+                        tlv::ReceiptNumber { number: 0x0789 },
+                    ],
+                }),
+            }),
+        };
+
+        let actual = PartialReversalAbort::zvt_deserialize(&bytes).unwrap().0;
         assert_eq!(actual, expected);
         assert_eq!(expected.zvt_serialize(), bytes);
     }
