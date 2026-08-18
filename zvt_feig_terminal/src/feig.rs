@@ -440,10 +440,8 @@ impl Feig {
 
     async fn status_enquiry(&mut self) -> Result<constants::TerminalStatusCode> {
         // Get the status inquiry so we can reason on the terminal_status_code.
-        let password = self.socket.config().feig_config.password;
         let request = packets::StatusEnquiry {
-            password: Some(password),
-            service_byte: None,
+            inner: None,
             tlv: None,
         };
 
