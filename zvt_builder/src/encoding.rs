@@ -142,30 +142,40 @@ impl Encoding<NaiveDateTime> for Default {
 /// The default is when the [Tag] is used as a Bmp-number or as a Tlv-tag.
 impl encoding::Encoding<Tag> for Default {
     fn encode(input: &Tag) -> Vec<u8> {
-        let low = input.0 >> 8;
-        if low == 0x1f || low == 0xff {
-            input.0.to_be_bytes().to_vec()
-        } else {
-            vec![input.0 as u8]
+        match input.0 {
+            // 3-byte tags 0x1f8000, 0x1f8001 (spec §9.4.1); stored as 0x8000, 0x8001 in u16.
+            0x8000 => vec![0x1f, 0x80, 0x00],
+            0x8001 => vec![0x1f, 0x80, 0x01],
+            tag if tag >> 8 == 0x1f || tag >> 8 == 0xff || tag >> 8 == 0x9f => {
+                tag.to_be_bytes().to_vec()
+            }
+            tag => vec![tag as u8],
         }
     }
 
     fn decode(bytes: &[u8]) -> ZVTResult<(Tag, &[u8])> {
-        let (tag, new_bytes): (u8, _) = encoding::BigEndian::decode(bytes)?;
-        // §9.4.1 of the PA00P015 defines a lot of tags, there is a bunch of 2 byte tags that start
-        // with 0xf1xx, there is also 0xff01-0xff04 defined there.
-        // TODO(hrapp): The same section also mentions tags 0x9f5a, 0x9f5b, and three byte tags
-        // 0x1f8000 and 0x1f8001 which we are not handling correctly currently.
-        if tag == 0x1f || tag == 0xff {
-            if bytes.len() < 2 {
-                Err(ZVTError::IncompleteData)
-            } else {
-                let (tag, new_bytes): (u16, _) = encoding::BigEndian::decode(bytes)?;
-                Ok((Tag(tag), new_bytes))
-            }
-        } else {
-            Ok((Tag(tag as u16), new_bytes))
+        let (first, rest): (u8, _) = encoding::BigEndian::decode(bytes)?;
+
+        // 3-byte tags: 0x1f8000, 0x1f8001 (spec §9.4.1)
+        if first == 0x1f
+            && rest.len() >= 2
+            && rest[0] == 0x80
+            && (rest[1] == 0x00 || rest[1] == 0x01)
+        {
+            let tag = u32::from_be_bytes([first, rest[0], rest[1], 0]) >> 8;
+            return Ok((Tag(tag as u16), &rest[2..]));
         }
+
+        // 2-byte tags: 0x1fxx, 0xffxx, 0x9fxx
+        if first == 0x1f || first == 0xff || first == 0x9f {
+            if bytes.len() < 2 {
+                return Err(ZVTError::IncompleteData);
+            }
+            let (tag, new_bytes): (u16, _) = encoding::BigEndian::decode(bytes)?;
+            return Ok((Tag(tag), new_bytes));
+        }
+
+        Ok((Tag(first as u16), rest))
     }
 }
 
@@ -377,5 +387,41 @@ mod test {
         assert_eq!(Bcd::encode(&1234u16), [0x12, 0x34]);
         let a: u16 = Bcd::decode(&[0x12, 0x34]).unwrap().0;
         assert_eq!(a, 1234);
+    }
+
+    #[test]
+    fn test_tag_default_encode_decode() {
+        // Single-byte BMP tag.
+        assert_eq!(Default::encode(&Tag(0x23)), [0x23]);
+        assert_eq!(Default::decode(&[0x23, 0x01]).unwrap(), (Tag(0x23), &[0x01][..]));
+
+        // 2-byte tags: 0x1fxx, 0xffxx, 0x9fxx (EMV).
+        assert_eq!(Default::encode(&Tag(0x1f01)), [0x1f, 0x01]);
+        assert_eq!(Default::decode(&[0x1f, 0x01, 0x02]).unwrap(), (Tag(0x1f01), &[0x02][..]));
+
+        assert_eq!(Default::encode(&Tag(0xff04)), [0xff, 0x04]);
+        assert_eq!(Default::decode(&[0xff, 0x04]).unwrap(), (Tag(0xff04), &[][..]));
+
+        assert_eq!(Default::encode(&Tag(0x9f5a)), [0x9f, 0x5a]);
+        assert_eq!(Default::decode(&[0x9f, 0x5a, 0x00]).unwrap(), (Tag(0x9f5a), &[0x00][..]));
+
+        assert_eq!(Default::encode(&Tag(0x9f5b)), [0x9f, 0x5b]);
+        assert_eq!(Default::decode(&[0x9f, 0x5b]).unwrap(), (Tag(0x9f5b), &[][..]));
+
+        // 3-byte tags (stored in u16 as lower 16 bits of wire tag >> 8).
+        assert_eq!(Default::encode(&Tag(0x8000)), [0x1f, 0x80, 0x00]);
+        assert_eq!(Default::decode(&[0x1f, 0x80, 0x00, 0xab]).unwrap(), (Tag(0x8000), &[0xab][..]));
+
+        assert_eq!(Default::encode(&Tag(0x8001)), [0x1f, 0x80, 0x01]);
+        assert_eq!(Default::decode(&[0x1f, 0x80, 0x01]).unwrap(), (Tag(0x8001), &[][..]));
+
+        // 2-byte 0x1f80 must not be parsed as 3-byte prefix.
+        assert_eq!(Default::decode(&[0x1f, 0x80, 0x99]).unwrap(), (Tag(0x1f80), &[0x99][..]));
+
+        // Incomplete multi-byte tags.
+        let incomplete: ZVTResult<(Tag, &[u8])> = Default::decode(&[0x9f]);
+        assert_eq!(incomplete, Err(ZVTError::IncompleteData));
+        assert_eq!(Default::decode(&[0x1f, 0x80, 0x00]), Ok((Tag(0x8000), &[][..])));
+        assert_eq!(Default::decode(&[0x1f, 0x80]), Ok((Tag(0x1f80), &[][..])));
     }
 }
