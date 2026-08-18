@@ -18,9 +18,9 @@ rust.toolchain(
 use_repo(rust, "rust_toolchains")
 register_toolchains("@rust_toolchains//:all")
 
-crate_index = use_extension("@rules_rust//crate_universe:extensions.bzl", "crate")
-crate_index.from_cargo(
-    name = "crate_index",
+zvt_crates = use_extension("@rules_rust//crate_universe:extensions.bzl", "crate")
+zvt_crates.from_cargo(
+    name = "zvt_crates",
     cargo_lockfile = "//:Cargo.lock",
     manifests = [
         "//:Cargo.toml",
@@ -31,4 +31,4 @@ crate_index.from_cargo(
         "//zvt_feig_terminal:Cargo.toml",
     ],
 )
-use_repo(crate_index, "crate_index")
+use_repo(zvt_crates, "zvt_crates")

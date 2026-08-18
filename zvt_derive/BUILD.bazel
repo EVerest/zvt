@@ -1,5 +1,5 @@
 load("@rules_rust//rust:defs.bzl", "rust_library", "rust_proc_macro", "rust_test")
-load("@crate_index//:defs.bzl", "all_crate_deps")
+load("@zvt_crates//:defs.bzl", "all_crate_deps")
 
 rust_proc_macro(
     name = "zvt_derive",
