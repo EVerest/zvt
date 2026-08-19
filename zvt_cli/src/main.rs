@@ -319,8 +319,10 @@ async fn status(
         }
         StatusType::Zvt => {
             let request = packets::StatusEnquiry {
-                password: Some(password),
-                service_byte: service_byte,
+                inner: service_byte.map(|service_byte| packets::StatusEnquiryInner {
+                    password,
+                    service_byte,
+                }),
                 tlv: None,
             };
 

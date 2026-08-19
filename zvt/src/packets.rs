@@ -133,16 +133,20 @@ pub struct IntermediateStatusInformation {
     pub timeout: Option<u8>,
 }
 
+#[derive(Debug, Default, PartialEq, Zvt)]
+pub struct StatusEnquiryInner {
+    #[zvt_bmp(length = length::Fixed<3>, encoding = encoding::Bcd)]
+    pub password: usize,
+
+    #[zvt_bmp(number = 0x03)]
+    pub service_byte: u8,
+}
+
 /// Chapter 2.55
 #[derive(Debug, PartialEq, Zvt)]
 #[zvt_control_field(class = 0x05, instr = 0x01)]
 pub struct StatusEnquiry {
-    // TODO(ddo) the password must only be set if service byte is also set.
-    #[zvt_bmp(length = length::Fixed<3>, encoding = encoding::Bcd)]
-    pub password: Option<usize>,
-
-    #[zvt_bmp(number = 0x03)]
-    pub service_byte: Option<u8>,
+    pub inner: Option<StatusEnquiryInner>,
 
     #[zvt_bmp(number = 0x06, length = length::Tlv)]
     pub tlv: Option<tlv::StatusEnquiry>,
@@ -903,6 +907,32 @@ pub mod tests {
         };
 
         let actual = PartialReversalAbort::zvt_deserialize(&bytes).unwrap().0;
+        assert_eq!(actual, expected);
+        assert_eq!(expected.zvt_serialize(), bytes);
+    }
+
+    #[rstest::rstest]
+    fn test_status_enquiry() {
+        let bytes = [5, 1, 0];
+        let actual = StatusEnquiry::zvt_deserialize(&bytes).unwrap().0;
+        let expected = StatusEnquiry {
+            inner: None,
+            tlv: None,
+        };
+
+        assert_eq!(actual, expected);
+        assert_eq!(expected.zvt_serialize(), bytes);
+
+        let bytes = [5, 1, 5, 0, 18, 52, 3, 2];
+        let actual = StatusEnquiry::zvt_deserialize(&bytes).unwrap().0;
+        let expected = StatusEnquiry {
+            inner: Some(StatusEnquiryInner {
+                password: 1234,
+                service_byte: 2,
+            }),
+            tlv: None,
+        };
+
         assert_eq!(actual, expected);
         assert_eq!(expected.zvt_serialize(), bytes);
     }
