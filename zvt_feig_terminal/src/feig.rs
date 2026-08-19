@@ -17,7 +17,13 @@ use zvt::{constants, feig, packets, sequences};
 /// The card information returned from read-card.
 pub enum CardInfo {
     /// Indicatates if we've received a bank card.
-    Bank,
+    Bank(
+        /// The card identification item (Tlv tag 0x1f14), identifying the
+        /// physical card. Only reported by the terminal when reading with
+        /// [READ_CARD_READING_CONTROL]. Per the ZVT specification the value
+        /// contains no plain text card data and may be stored.
+        Option<String>,
+    ),
 
     /// Indicates if we've received a member ship card. The stirng is our tag-id.
     MembershipCard(String),
@@ -70,10 +76,18 @@ pub enum Error {
 /// Default card type, which is chip-card, as defined in Table 6.
 const CARD_TYPE: Option<u8> = Some(0x10);
 
-/// Default value for reading control.
+/// Card reading control (Tlv tag 0x1f15) using 'Detect Card'.
 ///
-/// See Tlv tag 0x1f15 for the documentation.
-const SHORT_CARD_READING_CONTROL: Option<u8> = Some(0xd0);
+/// The terminal does not send commands to payment cards: fast, but the card
+/// identification item (Tlv tag 0x1f14) cannot be computed for them.
+pub const DETECT_CARD_READING_CONTROL: u8 = 0xd0;
+
+/// Card reading control (Tlv tag 0x1f15) fully reading the card.
+///
+/// Slower than [DETECT_CARD_READING_CONTROL], but the terminal reports the
+/// card identification item (Tlv tag 0x1f14) for payment cards, which
+/// identifies the physical card - see [CardInfo::Bank].
+pub const READ_CARD_READING_CONTROL: u8 = 0xc0;
 
 /// Default value for allowed card types.
 ///
@@ -531,7 +545,11 @@ impl Feig {
     ///
     /// The call will either return some [CardInfo] or [None] - if there is no
     /// card presented during the specified [config.read_card_timeout].
-    pub async fn read_card(&mut self) -> Result<CardInfo> {
+    ///
+    /// # Arguments
+    /// * `card_reading_control` - The card reading control (Tlv tag 0x1f15),
+    ///   see [PAYMENT_CARD_READING_CONTROL] and [DETECT_CARD_READING_CONTROL].
+    pub async fn read_card(&mut self, card_reading_control: u8) -> Result<CardInfo> {
         if self.end_of_day_last_instant.elapsed() >= self.end_of_day_max_interval
             && self.transactions.is_empty()
         {
@@ -543,7 +561,7 @@ impl Feig {
             card_type: CARD_TYPE,
             dialog_control: DIALOG_CONTROL,
             tlv: Some(packets::tlv::ReadCard {
-                card_reading_control: SHORT_CARD_READING_CONTROL,
+                card_reading_control: Some(card_reading_control),
                 card_type: ALLOWED_CARDS,
             }),
         };
@@ -589,8 +607,19 @@ impl Feig {
                 sequences::ReadCardResponse::StatusInformation(data) => {
                     // Retrieve the card information.
                     let tlv = data.tlv.ok_or(zvt::ZVTError::IncompleteData)?;
-                    // Remove the black-listed application_ids.
-                    let application_id = tlv.subs.iter().find(|sub| match &sub.application_id {
+                    // Full reads report the applications on the card under
+                    // `subs_on_card` (Tlv tag 0x62), detect reads under
+                    // `subs` (Tlv tag 0x60).
+                    let subs_on_card = match &tlv.subs_on_card {
+                        Some(subs_on_card) => subs_on_card.subs.as_slice(),
+                        None => &[],
+                    };
+                    // Remove the black-listed application_ids: fleet cards
+                    // also present application ids but must be treated as
+                    // membership cards.
+                    let application_id = tlv.subs.iter().chain(subs_on_card).find(|sub| match &sub
+                        .application_id
+                    {
                         None => false,
                         Some(application_id) => APPLICATION_ID_DENYLIST_PREFIX
                             .iter()
@@ -599,8 +628,25 @@ impl Feig {
 
                     if let Some(application_id) = application_id {
                         log::info!("Found the application_id {application_id:?}");
-                        card_info = Some(CardInfo::Bank);
+                        if tlv.card_identification_item.is_none()
+                            && card_reading_control & 0x10 == 0
+                        {
+                            // A full read should report the identification
+                            // item - without it the card cannot be identified
+                            // on a renewed presentation.
+                            log::warn!("Payment card without a card identification item");
+                        }
+                        // The per-card identity - the application_id only
+                        // tells us the payment scheme and is shared between
+                        // cards.
+                        card_info = Some(CardInfo::Bank(tlv.card_identification_item));
                     } else if let Some(mut uuid) = tlv.uuid {
+                        if tlv.card_identification_item.is_some() {
+                            // The terminal identified the card as payment
+                            // capable but we treat it as a membership card
+                            // (e.g. a fleet card).
+                            log::warn!("Membership card with a card identification item");
+                        }
                         uuid = uuid.to_uppercase();
                         if uuid.len() > 14 {
                             uuid = uuid[uuid.len() - 14..].to_string();
