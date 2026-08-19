@@ -17,13 +17,13 @@ use zvt::{constants, feig, packets, sequences};
 /// The card information returned from read-card.
 pub enum CardInfo {
     /// Indicatates if we've received a bank card.
-    Bank {
+    Bank(
         /// The card identification item (Tlv tag 0x1f14), identifying the
         /// physical card. Only reported by the terminal when reading with
         /// [READ_CARD_READING_CONTROL]. Per the ZVT specification the value
         /// contains no plain text card data and may be stored.
-        card_id: Option<String>,
-    },
+        Option<String>,
+    ),
 
     /// Indicates if we've received a member ship card. The stirng is our tag-id.
     MembershipCard(String),
@@ -641,9 +641,7 @@ impl Feig {
                         // The per-card identity - the application_id only
                         // tells us the payment scheme and is shared between
                         // cards.
-                        card_info = Some(CardInfo::Bank {
-                            card_id: tlv.card_identification_item,
-                        });
+                        card_info = Some(CardInfo::Bank(tlv.card_identification_item));
                     } else if let Some(mut uuid) = tlv.uuid {
                         if tlv.card_identification_item.is_some() {
                             // The terminal identified the card as payment
