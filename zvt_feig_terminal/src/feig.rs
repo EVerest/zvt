@@ -2,7 +2,7 @@ use crate::config::Config;
 use crate::denylist::APPLICATION_ID_DENYLIST_PREFIX;
 use crate::stream::{ResetSequence, TcpStream};
 use anyhow::{anyhow, bail, ensure, Result};
-use log::{error, info, warn};
+use log::{info, warn};
 use num_traits::FromPrimitive;
 use serde::Deserialize;
 use serde_json;
@@ -16,7 +16,7 @@ use zvt::{constants, feig, packets, sequences};
 
 /// The card information returned from read-card.
 pub enum CardInfo {
-    /// Indicatates if we've received a bank card.
+    /// Indicates if we've received a bank card.
     Bank(
         /// The card identification item (Tlv tag 0x1f14), identifying the
         /// physical card. Only reported by the terminal when reading with
@@ -25,7 +25,7 @@ pub enum CardInfo {
         Option<String>,
     ),
 
-    /// Indicates if we've received a member ship card. The stirng is our tag-id.
+    /// Indicates if we've received a membership card. The string is our tag-id.
     MembershipCard(String),
 }
 
@@ -287,6 +287,12 @@ impl Feig {
     }
 
     async fn run_diagnosis(&mut self, diagnosis: packets::DiagnosisType) -> Result<()> {
+        let config = self.socket.config();
+        let terminal_id = config.terminal_id.parse::<usize>()?;
+        if terminal_id == 0 {
+            info!("Run-Diagnosis: No `terminal-id` assigned, returning");
+            return Ok(());
+        }
         let request = packets::Diagnosis {
             tlv: Some(packets::tlv::Diagnosis {
                 diagnosis_type: Some(diagnosis as u8),
@@ -548,14 +554,24 @@ impl Feig {
     ///
     /// # Arguments
     /// * `card_reading_control` - The card reading control (Tlv tag 0x1f15),
-    ///   see [PAYMENT_CARD_READING_CONTROL] and [DETECT_CARD_READING_CONTROL].
-    pub async fn read_card(&mut self, card_reading_control: u8) -> Result<CardInfo> {
+    ///   see [READ_CARD_READING_CONTROL] and [DETECT_CARD_READING_CONTROL].
+    pub async fn read_card(&mut self, mut card_reading_control: u8) -> Result<CardInfo> {
         if self.end_of_day_last_instant.elapsed() >= self.end_of_day_max_interval
             && self.transactions.is_empty()
         {
             self.end_of_day().await?;
         }
-        let timeout_sec = self.socket.config().feig_config.read_card_timeout;
+
+        let config = self.socket.config();
+        if card_reading_control == READ_CARD_READING_CONTROL {
+            let terminal_id = config.terminal_id.parse::<usize>()?;
+            if terminal_id == 0 {
+                warn!("`READ_CARD_READING_CONTROL` not supported without terminal id");
+                card_reading_control = DETECT_CARD_READING_CONTROL;
+            }
+        }
+
+        let timeout_sec = config.feig_config.read_card_timeout;
         let request = packets::ReadCard {
             timeout_sec,
             card_type: CARD_TYPE,
@@ -566,7 +582,7 @@ impl Feig {
             }),
         };
 
-        let max_retry_attempts = self.socket.config().feig_config.max_retry_attempts;
+        let max_retry_attempts = config.feig_config.max_retry_attempts;
         let retry = futures::stream::repeat(())
             .throttle(Duration::from_secs(2))
             .take(1 + max_retry_attempts);
