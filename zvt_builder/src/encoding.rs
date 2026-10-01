@@ -126,10 +126,10 @@ impl Encoding<NaiveDateTime> for Default {
         Ok((
             NaiveDate::from_ymd_opt(
                 date as i32 / 10000,
-                (date as u32 % 1000) / 100,
+                (date as u32 % 10000) / 100,
                 date as u32 % 100,
             )
-            .unwrap()
+            .ok_or(ZVTError::IncompleteData)?
             .and_hms_opt(time / 10000, (time % 10000) / 100, time % 100)
             .ok_or(ZVTError::IncompleteData)?,
             data,
