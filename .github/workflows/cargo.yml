@@ -18,3 +18,28 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo test --all
       - run: cargo test --all --examples
+  coverage:
+    name: cargo llvm-cov
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      - uses: taiki-e/install-action@cargo-llvm-cov
+      # Run the tests once; the reports below reuse the collected profiles.
+      # zvt_cli is excluded: it has no tests and would only dilute the total.
+      - run: cargo llvm-cov --workspace --all-features --exclude zvt_cli --no-report
+      - run: cargo llvm-cov report --lcov --output-path lcov.info
+      - run: cargo llvm-cov report --html
+      - name: Coverage summary
+        run: |
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cargo llvm-cov report --summary-only >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: |
+            lcov.info
+            target/llvm-cov/html
