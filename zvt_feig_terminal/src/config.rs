@@ -97,10 +97,21 @@ fn iso_4217(code: &str) -> Result<usize> {
 pub enum TerminalAddress {
     /// A fixed ip-address.
     Ip(Ipv4Addr),
-    /// Look up the ip-address via mDNS as `cvend-<feig_serial>.local` - and
-    /// look it up again whenever connecting fails, since the terminal may have
-    /// received a new address in the meantime.
-    Mdns,
+    /// Look up the ip-address via mDNS as `cvend-<feig_serial>.local`. Holds
+    /// the address of the last lookup - `None` means the terminal must be
+    /// looked up: at the start, or after connecting failed, since the
+    /// terminal may have received a new address in the meantime.
+    Mdns(Option<Ipv4Addr>),
+}
+
+impl TerminalAddress {
+    /// Returns the ip-address to connect to, if there is one.
+    pub fn ip_address(&self) -> Option<Ipv4Addr> {
+        match self {
+            Self::Ip(ip_address) | Self::Mdns(Some(ip_address)) => Some(*ip_address),
+            Self::Mdns(None) => None,
+        }
+    }
 }
 
 /// The configuration needed for the entire payment terminal, which contains
@@ -154,5 +165,19 @@ mod tests {
         // Invalid inputs.
         assert!(serde_json::from_str::<FeigConfig>("{\"currency\": \"ABC\"}").is_err());
         assert!(serde_json::from_str::<FeigConfig>("{\"currency\": 123}").is_err());
+    }
+
+    #[test]
+    fn test_terminal_address_ip_address() {
+        let ip = Ipv4Addr::new(192, 168, 23, 50);
+        let parameters = [
+            (TerminalAddress::Ip(ip), Some(ip)),
+            (TerminalAddress::Mdns(Some(ip)), Some(ip)),
+            (TerminalAddress::Mdns(None), None),
+        ];
+
+        for (address, expected) in parameters {
+            assert_eq!(address.ip_address(), expected, "Failed for {address:?}");
+        }
     }
 }
