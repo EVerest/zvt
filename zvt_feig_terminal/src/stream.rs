@@ -8,7 +8,7 @@
 use crate::config::{Config, TerminalAddress};
 use crate::feig::Error as FeigError;
 use crate::mdns::Backoff;
-use anyhow::{anyhow, bail, Result};
+use anyhow::{bail, Result};
 use async_stream::stream;
 use futures::stream::BoxStream;
 use log::{debug, info, warn};
@@ -172,13 +172,19 @@ impl TcpStream {
         if self.config.address == TerminalAddress::Mdns {
             self.mdns_lookup().await;
         }
-        let ip_address = self.ip_address.ok_or_else(|| {
-            anyhow!(
+        // Without an address we don't log: the failed lookup already warned,
+        // and every retry until the next lookup would repeat it.
+        let Some(ip_address) = self.ip_address else {
+            bail!(
                 "No ip-address for the feig_serial {}",
                 self.config.feig_serial
-            )
-        })?;
+            );
+        };
+        warn!("Reconnecting to {ip_address}");
         let res = inner::connect(&self.config, ip_address).await;
+        if let Err(err) = &res {
+            warn!("Failed to reconnect: {err:?}");
+        }
         self.connect_failed = res.is_err();
         res
     }
@@ -252,11 +258,9 @@ where
             while let Some(()) = retry.next().await {
                 // We don't have a valid connection - we must reconnect.
                 if src.inner.is_none() {
-                    warn!("Reconnecting");
                     match src.connect().await {
                         Ok(inner) => src.inner = Some(inner),
                         Err(err) => {
-                            warn!("Failed to reconnect: {err:?}");
                             yield Err(err);
                             continue;
                         }
@@ -311,6 +315,7 @@ where
 mod test {
     use super::*;
     use crate::config::FeigConfig;
+    use anyhow::anyhow;
     use std::pin::Pin;
     use std::task::{Context, Poll};
     use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
