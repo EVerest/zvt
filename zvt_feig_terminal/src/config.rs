@@ -91,15 +91,27 @@ fn iso_4217(code: &str) -> Result<usize> {
     }
 }
 
+/// Where to find the PT
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum TerminalAddress {
+    /// A fixed ip-address.
+    Ip(Ipv4Addr),
+    /// Look up the ip-address via mDNS as `cvend-<feig_serial>.local` - and
+    /// look it up again whenever connecting fails, since the terminal may have
+    /// received a new address in the meantime.
+    Mdns,
+}
+
 /// The configuration needed for the entire payment terminal, which contains
 /// parsed data.
 #[derive(Clone, Debug)]
 pub struct Config {
     pub terminal_id: String,
-    /// We only use feig_serial to make sure we are connected to the proper
-    /// terminal.
+    /// We use feig_serial to make sure we are connected to the proper
+    /// terminal - and with [TerminalAddress::Mdns] to find it.
     pub feig_serial: String,
-    pub ip_address: Ipv4Addr,
+    pub address: TerminalAddress,
     /// Parsed from [PoleConfiguration::configuration].
     pub feig_config: FeigConfig,
     /// Maximum number of concurrent transactions.
@@ -111,7 +123,7 @@ impl Default for Config {
         Self {
             terminal_id: String::default(),
             feig_serial: String::default(),
-            ip_address: Ipv4Addr::new(0, 0, 0, 0),
+            address: TerminalAddress::Ip(Ipv4Addr::new(0, 0, 0, 0)),
             feig_config: FeigConfig::default(),
             transactions_max_num: 1,
         }
