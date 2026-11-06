@@ -293,6 +293,8 @@ where
 mod test {
     use super::*;
     use crate::config::FeigConfig;
+    // The tests using the static mocks of [inner] must not run in parallel.
+    use serial_test::serial;
     use std::pin::Pin;
     use std::task::{Context, Poll};
     use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
@@ -425,12 +427,6 @@ mod test {
         }
     }
 
-    /// Serializes the tests which use the static mocks of [inner].
-    async fn lock_mocks() -> tokio::sync::MutexGuard<'static, ()> {
-        static MOCKS: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
-        MOCKS.lock().await
-    }
-
     fn get_config() -> Config {
         Config {
             feig_config: FeigConfig {
@@ -445,9 +441,9 @@ mod test {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_running_once() {
         // Test the connection failure at beginning.
-        let _lock = lock_mocks().await;
         let mut socket = TcpStream {
             config: get_config(),
             ..TcpStream::default()
@@ -573,8 +569,8 @@ mod test {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_connect_uses_the_fixed_ip_without_lookup() {
-        let _lock = lock_mocks().await;
         let lookup = inner::lookup_context();
         lookup.expect().never();
         let connect = inner::connect_context();
@@ -595,8 +591,8 @@ mod test {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_connect_reuses_the_found_address_while_connecting_works() {
-        let _lock = lock_mocks().await;
         let lookup = inner::lookup_context();
         lookup
             .expect()
@@ -618,8 +614,8 @@ mod test {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_connect_forgets_the_address_after_a_failed_connect() {
-        let _lock = lock_mocks().await;
         let lookup = inner::lookup_context();
         lookup.expect().times(1).returning(|_| Ok(IP_1));
         let connect = inner::connect_context();
@@ -637,8 +633,8 @@ mod test {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_connect_looks_up_the_address_again_after_a_failed_connect() {
-        let _lock = lock_mocks().await;
         let lookup = inner::lookup_context();
         let mut ips = vec![IP_2, IP_1];
         lookup
@@ -665,8 +661,8 @@ mod test {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_connect_fails_if_no_address_was_found() {
-        let _lock = lock_mocks().await;
         let lookup = inner::lookup_context();
         lookup.expect().times(1).returning(|_| bail!("no answer"));
         let connect = inner::connect_context();
@@ -683,8 +679,8 @@ mod test {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_connect_skips_the_lookup_while_the_backoff_is_not_ready() {
-        let _lock = lock_mocks().await;
         let lookup = inner::lookup_context();
         lookup.expect().times(1).returning(|_| bail!("no answer"));
         let connect = inner::connect_context();
