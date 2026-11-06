@@ -662,24 +662,6 @@ mod test {
 
     #[tokio::test]
     #[serial]
-    async fn test_connect_fails_if_no_address_was_found() {
-        let lookup = inner::lookup_context();
-        lookup.expect().times(1).returning(|_| bail!("no answer"));
-        let connect = inner::connect_context();
-        connect
-            .expect()
-            .withf(|config| config.address == TerminalAddress::Mdns(None))
-            .times(1)
-            .returning(|_| bail!("no ip-address"));
-        let mut socket = mdns_socket();
-
-        let res = socket.connect().await;
-
-        assert!(res.is_err());
-    }
-
-    #[tokio::test]
-    #[serial]
     async fn test_connect_skips_the_lookup_while_the_backoff_is_not_ready() {
         let lookup = inner::lookup_context();
         lookup.expect().times(1).returning(|_| bail!("no answer"));

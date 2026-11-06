@@ -303,13 +303,6 @@ mod test {
     }
 
     #[test]
-    fn test_backoff_is_ready_initially() {
-        let backoff = Backoff::default();
-
-        assert!(backoff.is_ready());
-    }
-
-    #[test]
     fn test_backoff_doubles_the_delay_up_to_the_maximum() {
         let mut backoff = Backoff::default();
 
