@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::config::{Config, TerminalAddress};
 use crate::denylist::APPLICATION_ID_DENYLIST_PREFIX;
 use crate::stream::{ResetSequence, TcpStream};
 use anyhow::{anyhow, bail, ensure, Result};
@@ -190,11 +190,12 @@ impl Feig {
         Ok(this)
     }
 
-    /// Reconnects under the given ip-address.
+    /// Reconnects under the given ip-address. From then on the terminal is
+    /// expected under this address, also with [TerminalAddress::Mdns].
     pub async fn reconnect(&mut self, ip_address: Ipv4Addr) -> Result<()> {
         let config = {
             let mut config = self.socket.config().clone();
-            config.ip_address = ip_address;
+            config.address = TerminalAddress::Ip(ip_address);
             config
         };
         self.socket = TcpStream::new(config)?;

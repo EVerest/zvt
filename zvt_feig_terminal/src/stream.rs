@@ -5,13 +5,14 @@
 //! it self contains all information to reset a tcp connection and a wrapper
 //! around [sequence::Sequence] - which is responsible for restarting a
 //! dropped connection and terminating it on errors.s
-use crate::config::Config;
+use crate::config::{Config, TerminalAddress};
 use crate::feig::Error as FeigError;
+use crate::mdns::Backoff;
 use anyhow::{bail, Result};
 use async_stream::stream;
 use futures::stream::BoxStream;
 use log::{debug, info, warn};
-use std::net::{SocketAddr, SocketAddrV4};
+use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::time::Duration;
 use tokio_stream::StreamExt;
 use zvt::{encoding, feig, io, packets, sequences, sequences::Sequence};
@@ -46,7 +47,10 @@ mod outer {
         pub async fn connect(config: &Config) -> Result<io::PacketTransport<InnerTcpStream>> {
             // Configuration byte.
             pub const CONFIG_BYTE: u8 = 0xde;
-            let address = SocketAddr::V4(SocketAddrV4::new(config.ip_address, 22000));
+            let Some(ip_address) = config.address.ip_address() else {
+                bail!("No ip-address for the feig_serial {}", config.feig_serial);
+            };
+            let address = SocketAddr::V4(SocketAddrV4::new(ip_address, 22000));
             #[cfg(not(test))]
             let source: InnerTcpStream = {
                 let socket = tokio::net::TcpSocket::new_v4()?;
@@ -105,6 +109,14 @@ mod outer {
                     feig::sequences::GetSystemInfoResponse::Abort(packet) => bail!(zvt::ZVTError::Aborted(packet.error))
                 }
         }
+
+        /// Looks up the ip-address of the PT with the `feig_serial` via mDNS.
+        ///
+        /// We mock this function in the test configuration.
+        #[cfg_attr(test, allow(dead_code))]
+        pub async fn lookup(feig_serial: &str) -> Result<Ipv4Addr> {
+            crate::mdns::resolve(feig_serial).await
+        }
     }
 }
 
@@ -118,6 +130,8 @@ pub struct TcpStream {
     config: Config,
     /// Underlying I/O.
     inner: Option<io::PacketTransport<InnerTcpStream>>,
+    /// Throttles the mDNS lookups while they fail.
+    mdns_backoff: Backoff,
 }
 
 impl TcpStream {
@@ -134,13 +148,46 @@ impl TcpStream {
 
         Ok(Self {
             config,
-            inner: None,
+            ..Self::default()
         })
     }
 
     /// Returns the config used to construct the stream.
     pub fn config(&self) -> &Config {
         &self.config
+    }
+
+    /// Connects to the terminal under its [TerminalAddress].
+    async fn connect(&mut self) -> Result<io::PacketTransport<InnerTcpStream>> {
+        // Look up the terminal if we have no address - but not more often
+        // than the backoff allows.
+        if self.config.address == TerminalAddress::Mdns(None) && self.mdns_backoff.is_ready() {
+            let ip_address = inner::lookup(&self.config.feig_serial).await;
+            match &ip_address {
+                Ok(_) => self.mdns_backoff.record_success(),
+                Err(_) => self.mdns_backoff.record_failure(),
+            }
+            self.config.address = TerminalAddress::Mdns(ip_address.ok());
+        }
+        // Without an address `inner::connect` fails right away. We don't log
+        // that: the failed lookup already warned, and every retry until the
+        // next lookup would repeat it.
+        let ip_address = self.config.address.ip_address();
+        if let Some(ip_address) = ip_address {
+            warn!("Reconnecting to {ip_address}");
+        }
+        let res = inner::connect(&self.config).await;
+        if let Err(err) = &res {
+            if ip_address.is_some() {
+                warn!("Failed to reconnect: {err:?}");
+            }
+            // The terminal may have received a new address - look it up
+            // again.
+            if let TerminalAddress::Mdns(ip_address) = &mut self.config.address {
+                *ip_address = None;
+            }
+        }
+        res
     }
 }
 
@@ -189,11 +236,9 @@ where
             while let Some(()) = retry.next().await {
                 // We don't have a valid connection - we must reconnect.
                 if src.inner.is_none() {
-                    warn!("Reconnecting");
-                    match inner::connect(&src.config).await {
+                    match src.connect().await {
                         Ok(inner) => src.inner = Some(inner),
                         Err(err) => {
-                            warn!("Failed to reconnect: {err:?}");
                             yield Err(err);
                             continue;
                         }
@@ -248,6 +293,8 @@ where
 mod test {
     use super::*;
     use crate::config::FeigConfig;
+    // The tests using the static mocks of [inner] must not run in parallel.
+    use serial_test::serial;
     use std::pin::Pin;
     use std::task::{Context, Poll};
     use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
@@ -394,11 +441,12 @@ mod test {
     }
 
     #[tokio::test]
+    #[serial]
     async fn test_running_once() {
         // Test the connection failure at beginning.
         let mut socket = TcpStream {
             config: get_config(),
-            inner: None,
+            ..TcpStream::default()
         };
 
         let ctx = inner::connect_context();
@@ -501,5 +549,133 @@ mod test {
         drop(stream);
         // The inner should still be none.
         assert!(socket.inner.is_none());
+    }
+    const IP_1: Ipv4Addr = Ipv4Addr::new(192, 168, 23, 50);
+    const IP_2: Ipv4Addr = Ipv4Addr::new(192, 168, 23, 60);
+
+    fn mdns_socket() -> TcpStream {
+        TcpStream::new(Config {
+            feig_serial: "serial".to_string(),
+            address: TerminalAddress::Mdns(None),
+            ..get_config()
+        })
+        .unwrap()
+    }
+
+    fn connected() -> Result<io::PacketTransport<InnerTcpStream>> {
+        Ok(io::PacketTransport {
+            source: InnerTcpStream {},
+        })
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_connect_uses_the_fixed_ip_without_lookup() {
+        let lookup = inner::lookup_context();
+        lookup.expect().never();
+        let connect = inner::connect_context();
+        connect
+            .expect()
+            .withf(|config| config.address == TerminalAddress::Ip(IP_1))
+            .times(1)
+            .returning(|_| connected());
+        let mut socket = TcpStream::new(Config {
+            address: TerminalAddress::Ip(IP_1),
+            ..get_config()
+        })
+        .unwrap();
+
+        let res = socket.connect().await;
+
+        assert!(res.is_ok());
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_connect_reuses_the_found_address_while_connecting_works() {
+        let lookup = inner::lookup_context();
+        lookup
+            .expect()
+            .withf(|feig_serial| feig_serial == "serial")
+            .times(1)
+            .returning(|_| Ok(IP_1));
+        let connect = inner::connect_context();
+        connect
+            .expect()
+            .withf(|config| config.address == TerminalAddress::Mdns(Some(IP_1)))
+            .times(2)
+            .returning(|_| connected());
+        let mut socket = mdns_socket();
+        socket.connect().await.unwrap();
+
+        let res = socket.connect().await;
+
+        assert!(res.is_ok());
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_connect_forgets_the_address_after_a_failed_connect() {
+        let lookup = inner::lookup_context();
+        lookup.expect().times(1).returning(|_| Ok(IP_1));
+        let connect = inner::connect_context();
+        connect
+            .expect()
+            .withf(|config| config.address == TerminalAddress::Mdns(Some(IP_1)))
+            .times(1)
+            .returning(|_| bail!("unreachable"));
+        let mut socket = mdns_socket();
+
+        let res = socket.connect().await;
+
+        assert!(res.is_err());
+        assert_eq!(socket.config.address, TerminalAddress::Mdns(None));
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_connect_looks_up_the_address_again_after_a_failed_connect() {
+        let lookup = inner::lookup_context();
+        let mut ips = vec![IP_2, IP_1];
+        lookup
+            .expect()
+            .times(2)
+            .returning(move |_| Ok(ips.pop().unwrap()));
+        let connect = inner::connect_context();
+        connect
+            .expect()
+            .withf(|config| config.address == TerminalAddress::Mdns(Some(IP_1)))
+            .times(1)
+            .returning(|_| bail!("unreachable"));
+        connect
+            .expect()
+            .withf(|config| config.address == TerminalAddress::Mdns(Some(IP_2)))
+            .times(1)
+            .returning(|_| connected());
+        let mut socket = mdns_socket();
+        assert!(socket.connect().await.is_err());
+
+        let res = socket.connect().await;
+
+        assert!(res.is_ok());
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_connect_skips_the_lookup_while_the_backoff_is_not_ready() {
+        let lookup = inner::lookup_context();
+        lookup.expect().times(1).returning(|_| bail!("no answer"));
+        let connect = inner::connect_context();
+        connect
+            .expect()
+            .withf(|config| config.address == TerminalAddress::Mdns(None))
+            .times(2)
+            .returning(|_| bail!("no ip-address"));
+        let mut socket = mdns_socket();
+        assert!(socket.connect().await.is_err());
+
+        let res = socket.connect().await;
+
+        assert!(res.is_err());
     }
 }
