@@ -15,7 +15,7 @@ use hickory_client::client::{Client, ClientHandle};
 use hickory_client::proto::rr::{DNSClass, Name, RData, RecordType};
 use hickory_client::proto::runtime::{RuntimeProvider, TokioRuntimeProvider, TokioTime};
 use hickory_client::proto::udp::{DnsUdpSocket, UdpClientStream};
-use log::debug;
+use log::{debug, info, warn};
 use std::future::Future;
 use std::io;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
@@ -118,13 +118,18 @@ impl RuntimeProvider for MdnsRuntimeProvider {
 
 /// Returns the ip-address of the Feig terminal with the given serial.
 pub(crate) async fn resolve(feig_serial: &str) -> Result<Ipv4Addr> {
-    lookup(
+    let res = lookup(
         MDNS_IPV4,
         &format!("cvend-{feig_serial}.local"),
         QUERY_ATTEMPTS,
         QUERY_TIMEOUT,
     )
-    .await
+    .await;
+    match &res {
+        Ok(ip_address) => info!("Found the feig_serial {feig_serial} at {ip_address}"),
+        Err(err) => warn!("Failed to look up the feig_serial {feig_serial}: {err:#}"),
+    }
+    res
 }
 
 /// Queries the A record of `name` at the `name_server` - up to `attempts`

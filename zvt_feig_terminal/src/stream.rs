@@ -159,8 +159,15 @@ impl TcpStream {
 
     /// Connects to the terminal under its [TerminalAddress].
     async fn connect(&mut self) -> Result<io::PacketTransport<InnerTcpStream>> {
-        if self.config.address == TerminalAddress::Mdns(None) {
-            self.mdns_lookup().await;
+        // Look up the terminal if we have no address - but not more often
+        // than the backoff allows.
+        if self.config.address == TerminalAddress::Mdns(None) && self.mdns_backoff.is_ready() {
+            let ip_address = inner::lookup(&self.config.feig_serial).await;
+            match &ip_address {
+                Ok(_) => self.mdns_backoff.record_success(),
+                Err(_) => self.mdns_backoff.record_failure(),
+            }
+            self.config.address = TerminalAddress::Mdns(ip_address.ok());
         }
         // Without an address `inner::connect` fails right away. We don't log
         // that: the failed lookup already warned, and every retry until the
@@ -181,26 +188,6 @@ impl TcpStream {
             }
         }
         res
-    }
-
-    /// Looks up the terminal via mDNS - but not more often than the backoff
-    /// allows.
-    async fn mdns_lookup(&mut self) {
-        if !self.mdns_backoff.is_ready() {
-            return;
-        }
-        let feig_serial = &self.config.feig_serial;
-        match inner::lookup(feig_serial).await {
-            Ok(ip_address) => {
-                info!("Found the feig_serial {feig_serial} at {ip_address}");
-                self.mdns_backoff.record_success();
-                self.config.address = TerminalAddress::Mdns(Some(ip_address));
-            }
-            Err(err) => {
-                warn!("Failed to look up the feig_serial {feig_serial}: {err:#}");
-                self.mdns_backoff.record_failure();
-            }
-        }
     }
 }
 
