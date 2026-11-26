@@ -496,6 +496,8 @@ async fn read_card(socket: &mut PacketTransport, args: &ReadCardArgs) -> Result<
         timeout_sec: args.timeout,
         card_type: Some(args.card_type),
         dialog_control: Some(args.dialog_control),
+        amount: None,
+        currency: None,
         tlv: Some(packets::tlv::ReadCard {
             card_reading_control: Some(args.short_card_reading_control),
             card_type: Some(args.allowed_cards),
