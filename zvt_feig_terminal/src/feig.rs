@@ -105,6 +105,10 @@ const DIALOG_CONTROL: Option<u8> = Some(0x02);
 /// Payment type according to PTs decision excluding `GeldKarte`.
 const PAYMENT_TYPE: Option<u8> = Some(0x40);
 
+/// [PAYMENT_TYPE] with the bit `xxxx xx1x` of table 4: the PT executes the
+/// payment with the card data of the previous Read Card.
+const PAYMENT_TYPE_PREVIOUS_READ: Option<u8> = Some(0x42);
+
 /// Identifier for the individual reference number.
 ///
 /// This identifier is used in BMP60 when transmitting the individual reference
@@ -153,6 +157,47 @@ pub struct Feig {
 
     /// The last end of day job.
     end_of_day_last_instant: std::time::Instant,
+
+    /// The amount sent with the last Read Card, if that read found a payment
+    /// card. A reservation of the same amount then needs no second card
+    /// presentation. See [Feig::read_card_for_reservation].
+    read_amount: Option<usize>,
+}
+
+/// The Read Card request.
+///
+/// With an `amount` the terminal prepares the card data for a payment of
+/// this amount, see [Feig::read_card_for_reservation].
+fn read_card_request(
+    timeout_sec: u8,
+    card_reading_control: u8,
+    amount: Option<usize>,
+    currency: usize,
+) -> packets::ReadCard {
+    packets::ReadCard {
+        timeout_sec,
+        card_type: CARD_TYPE,
+        dialog_control: DIALOG_CONTROL,
+        amount,
+        currency: amount.map(|_| currency),
+        tlv: Some(packets::tlv::ReadCard {
+            card_reading_control: Some(card_reading_control),
+            card_type: ALLOWED_CARDS,
+        }),
+    }
+}
+
+/// The payment type of a reservation of `amount`, after a Read Card which
+/// carried `read_amount`.
+///
+/// The terminal only uses the card data of the read if the amounts are equal;
+/// otherwise it requests the card again.
+fn reservation_payment_type(read_amount: Option<usize>, amount: usize) -> Option<u8> {
+    if read_amount == Some(amount) {
+        PAYMENT_TYPE_PREVIOUS_READ
+    } else {
+        PAYMENT_TYPE
+    }
 }
 
 /// Checks that the connected terminal's serial matches the expected one.
@@ -182,6 +227,7 @@ impl Feig {
             transactions_max_num,
             end_of_day_max_interval,
             end_of_day_last_instant: std::time::Instant::now(),
+            read_amount: None,
         };
 
         // Ignore the errors from configure. (call fails if e.x. the terminal id
@@ -556,7 +602,30 @@ impl Feig {
     /// # Arguments
     /// * `card_reading_control` - The card reading control (Tlv tag 0x1f15),
     ///   see [READ_CARD_READING_CONTROL] and [DETECT_CARD_READING_CONTROL].
-    pub async fn read_card(&mut self, mut card_reading_control: u8) -> Result<CardInfo> {
+    pub async fn read_card(&mut self, card_reading_control: u8) -> Result<CardInfo> {
+        self.read_card_for_reservation(card_reading_control, None)
+            .await
+    }
+
+    /// Reads the card data, like [Feig::read_card], and prepares a
+    /// reservation of `amount`.
+    ///
+    /// A full read ([READ_CARD_READING_CONTROL]) then carries the amount. If
+    /// the read finds a payment card, [Feig::begin_transaction] with the same
+    /// amount does not request the card again: the customer presents the
+    /// card once.
+    ///
+    /// The amount is not sent if no new transaction can be started, e.g. when
+    /// the card is read to stop a running transaction.
+    ///
+    /// Found by test with GER-APP 2.2.10; the FEIG documentation H00220-10e
+    /// does not describe the amount in Read Card.
+    pub async fn read_card_for_reservation(
+        &mut self,
+        mut card_reading_control: u8,
+        amount: Option<usize>,
+    ) -> Result<CardInfo> {
+        self.read_amount = None;
         if self.end_of_day_last_instant.elapsed() >= self.end_of_day_max_interval
             && self.transactions.is_empty()
         {
@@ -572,16 +641,19 @@ impl Feig {
             }
         }
 
+        // 'Detect Card' does not send commands to payment cards: there is
+        // no card data a reservation could use.
+        let full_read = card_reading_control & 0x10 == 0;
+        let can_begin = self.transactions.len() < self.transactions_max_num;
+        let amount = amount.filter(|_| full_read && can_begin);
+
         let timeout_sec = config.feig_config.read_card_timeout;
-        let request = packets::ReadCard {
+        let request = read_card_request(
             timeout_sec,
-            card_type: CARD_TYPE,
-            dialog_control: DIALOG_CONTROL,
-            tlv: Some(packets::tlv::ReadCard {
-                card_reading_control: Some(card_reading_control),
-                card_type: ALLOWED_CARDS,
-            }),
-        };
+            card_reading_control,
+            amount,
+            config.feig_config.currency,
+        );
 
         let max_retry_attempts = config.feig_config.max_retry_attempts;
         let retry = futures::stream::repeat(())
@@ -679,7 +751,13 @@ impl Feig {
             }
         }
 
-        card_info.ok_or(error)
+        drop(stream);
+
+        let card_info = card_info.ok_or(error)?;
+        if matches!(card_info, CardInfo::Bank(_)) {
+            self.read_amount = amount;
+        }
+        Ok(card_info)
     }
 
     /// Begins a transaction.
@@ -710,11 +788,15 @@ impl Feig {
             bail!(Error::ActiveTransaction("Token already in use".to_string()))
         }
 
+        // The card data of a read is used at most once.
+        let payment_type =
+            reservation_payment_type(self.read_amount.take(), pre_authorization_amount);
+
         let config = self.socket.config();
         let request = packets::Reservation {
             currency: Some(config.feig_config.currency),
             amount: Some(pre_authorization_amount),
-            payment_type: PAYMENT_TYPE,
+            payment_type,
             tlv: Some(packets::tlv::PreAuthData {
                 bmp_data: Some(packets::tlv::Bmp60 {
                     bmp_prefix: BMP_PREFIX.to_string(),
@@ -976,6 +1058,59 @@ impl Feig {
 #[cfg(test)]
 mod test {
     use super::*;
+    use zvt::ZvtSerializer;
+
+    const ARBITRARY_TIMEOUT_SEC: u8 = 60;
+    const EUR: usize = 978;
+
+    #[test]
+    fn read_card_request_without_amount_is_the_plain_read() {
+        let request =
+            read_card_request(ARBITRARY_TIMEOUT_SEC, READ_CARD_READING_CONTROL, None, EUR);
+
+        // 06 C0, timeout, 19 card type, FC dialog control, 06 Tlv (1F15, 1F60).
+        assert_eq!(
+            request.zvt_serialize(),
+            [
+                0x06, 0xc0, 0x0f, 0x3c, 0x19, 0x10, 0xfc, 0x02, 0x06, 0x08, 0x1f, 0x15, 0x01, 0xc0,
+                0x1f, 0x60, 0x01, 0x07
+            ]
+        );
+    }
+
+    #[test]
+    fn read_card_request_with_amount_carries_amount_and_currency() {
+        let request = read_card_request(
+            ARBITRARY_TIMEOUT_SEC,
+            READ_CARD_READING_CONTROL,
+            Some(1),
+            EUR,
+        );
+
+        // The frame with which GER-APP 2.2.10 accepted a reservation without
+        // a second card presentation: 04 amount and 49 currency before the Tlv.
+        assert_eq!(
+            request.zvt_serialize(),
+            [
+                0x06, 0xc0, 0x19, 0x3c, 0x19, 0x10, 0xfc, 0x02, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x01, 0x49, 0x09, 0x78, 0x06, 0x08, 0x1f, 0x15, 0x01, 0xc0, 0x1f, 0x60, 0x01, 0x07
+            ]
+        );
+    }
+
+    #[test]
+    fn reservation_uses_the_read_only_for_the_same_amount() {
+        // (amount of the read, amount of the reservation, payment type)
+        let cases = [
+            (Some(5000), 5000, PAYMENT_TYPE_PREVIOUS_READ),
+            (Some(5000), 6000, PAYMENT_TYPE),
+            (None, 5000, PAYMENT_TYPE),
+        ];
+
+        for (read_amount, amount, expected) in cases {
+            assert_eq!(reservation_payment_type(read_amount, amount), expected);
+        }
+    }
 
     #[test]
     fn ensure_device_id_accepts_matching_serial() {

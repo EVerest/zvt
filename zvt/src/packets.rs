@@ -450,6 +450,16 @@ pub struct ReadCard {
     #[zvt_bmp(number = 0xfc)]
     pub dialog_control: Option<u8>,
 
+    // The amount and the currency are not part of chapter 2.21. Found by test
+    // on a FEIG cVEND with GER-APP 2.2.10: with them, a following payment
+    // command with the payment type bit `xxxx xx1x` (table 4) uses the card
+    // data of this read and the card is not requested again.
+    #[zvt_bmp(number = 0x04, length = length::Fixed<6>, encoding = encoding::Bcd)]
+    pub amount: Option<usize>,
+
+    #[zvt_bmp(number = 0x49, length = length::Fixed<2>, encoding = encoding::Bcd)]
+    pub currency: Option<usize>,
+
     #[zvt_bmp(number = 0x06, length = length::Tlv)]
     pub tlv: Option<tlv::ReadCard>,
 }
@@ -519,6 +529,8 @@ pub mod tests {
             timeout_sec: 15,
             card_type: Some(16),
             dialog_control: Some(2),
+            amount: None,
+            currency: None,
             tlv: Some(tlv::ReadCard {
                 card_reading_control: Some(0xd0),
                 card_type: Some(0x07),
